@@ -1,0 +1,13 @@
+{
+  "name": "Mehmet Naim Çetin — Nextus",
+  "short_name": "M. Naim Çetin",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0B1220",
+  "theme_color": "#0B1220",
+  "lang": "tr",
+  "icons": [
+    { "src": "varlik/ikon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "varlik/ikon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "name": "dijital-profil",
+  "private": true,
+  "description": "Mehmet Naim Çetin dijital profil — statik site + Google Takvim randevu ucu",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node sunucu/sunucu.mjs",
+    "test": "node --test test/sunucu.test.mjs"
+  }
+}

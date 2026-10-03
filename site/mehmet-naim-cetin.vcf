@@ -1,0 +1,14 @@
+BEGIN:VCARD
+VERSION:3.0
+N:Çetin;Mehmet Naim;;;
+FN:Mehmet Naim Çetin
+ORG:Nextus
+TITLE:Kurucu
+TEL;TYPE=CELL,VOICE:+905526961703
+EMAIL;TYPE=INTERNET,PREF:mehmet1703naim@gmail.com
+URL:https://naim.nextusservis.com/
+ADR;TYPE=WORK:;;Medipol Teknopark\, Ekinciler Cd. No: 19\, Kavacık;Beykoz;İstanbul;34810;Türkiye
+X-SOCIALPROFILE;TYPE=linkedin:https://www.linkedin.com/in/mehmet-naim-%C3%A7etin/
+NOTE:Nextus — kurumsal yazılım. Fraunhofer Türkiye Temsilcisi.
+REV:2026-09-22T00:00:00Z
+END:VCARD

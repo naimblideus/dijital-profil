@@ -1,0 +1,12 @@
+# Depo herkese açık: yalnız yayınlanan site ve sunucu kodu girer.
+# CV, ham video, ekran görüntüleri, Netlify kalıntıları ve tasarım notları yerelde kalır.
+/*
+!/.gitignore
+!/.dockerignore
+!/Dockerfile
+!/README.md
+!/package.json
+!/site/
+!/sunucu/
+!/araclar/
+!/test/
