@@ -172,7 +172,7 @@ test('kimlik yokken: müsait 503 (ön yüz WhatsApp kipine düşer), randevu 503
 
 /* ---------- sahte Google ile ---------- */
 
-test('müsait saatler varsayılan 7/24: hafta sonu ve gece dahil, dolu saat hariç', async () => {
+test('müsait saatler varsayılan her gün 08:00–24:00: hafta sonu dahil, dolu saat hariç', async () => {
   googleBagla();
   const ilk = await musait();
   assert.equal(ilk.durum, 200);
@@ -184,10 +184,10 @@ test('müsait saatler varsayılan 7/24: hafta sonu ve gece dahil, dolu saat hari
     for (const s of g.slotlar) assert.ok(new Date(s.bas).getTime() >= enErken, '4 saatten yakın: ' + s.bas);
   }
   assert.equal(haftaGunleri.size, 7, 'yedi günün hepsi gelmeli');
-  const tamGun = ilk.v.gunler.slice(1, -1).find((g) => g.slotlar.length === 48);
-  assert.ok(tamGun, 'aradaki bir gün 48 yarım saatin hepsini göstermeli');
-  assert.equal(tamGun.slotlar[0].etiket, '00:00');
-  assert.equal(tamGun.slotlar[47].etiket, '23:30');
+  const tamGun = ilk.v.gunler.slice(1, -1).find((g) => g.slotlar.length === 32);
+  assert.ok(tamGun, 'aradaki bir gün 08:00–23:30 arası 32 yarım saati göstermeli');
+  assert.equal(tamGun.slotlar[0].etiket, '08:00');
+  assert.equal(tamGun.slotlar[31].etiket, '23:30');
   const secilen = ilk.v.gunler[0].slotlar[0].bas;
   google.durum.mesgul = [{ start: secilen, end: new Date(new Date(secilen).getTime() + 30 * 60e3).toISOString() }];
   const ikinci = await musait();

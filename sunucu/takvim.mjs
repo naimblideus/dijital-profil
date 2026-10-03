@@ -3,11 +3,11 @@
 
 export const ISTANBUL_OFSET = 3;
 
-// Varsayılan 7/24 açık (kullanıcı kararı 2026-10-04: "talep için 7/24 açık olsun").
+// Varsayılan her gün 08:00–24:00 (kullanıcı kararı 2026-10-04: "7/24 olsun, 8'den başlasın 00.00'a kadar").
 // Daraltmak için Coolify ortamı: CALISMA_BASLANGIC=09:00, CALISMA_BITIS=18:00,
 // HAFTA_SONU=kapali, OGLE_ARASI=12:30-13:30, GUN_BASINA_EN_FAZLA=6.
 const VARSAYILAN = {
-  baslangicSaat: 0,      // 00:00
+  baslangicSaat: 8,      // 08:00
   baslangicDakika: 0,
   bitisSaat: 24,         // 24:00
   bitisDakika: 0,
