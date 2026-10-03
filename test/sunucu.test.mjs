@@ -151,6 +151,7 @@ test('★ site klasörünün dışına çıkılamaz', async () => {
 
 test('bilinmeyen sayfa 404, statik sayfaya POST 405, sağlık ucu', async () => {
   assert.equal((await ham('/yok-boyle-sayfa')).durum, 404);
+  assert.equal((await ham('/gizlilik.html')).durum, 200, 'Google onay ekranı gizlilik sayfasını istiyor');
   assert.equal((await ham('/', { yontem: 'POST', govde: 'x' })).durum, 405);
   const s = await ham('/saglik');
   assert.equal(s.durum, 200);
