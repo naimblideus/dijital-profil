@@ -239,7 +239,7 @@ h1 {
 }
 .gun[aria-selected="true"] b { color: #F4FBFB; }
 
-.saat-izgara { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.saat-izgara { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .saat {
   min-height: 46px; padding: 0 8px;
   background: var(--zemin); border: none; border-radius: var(--r-kutu);
@@ -253,7 +253,7 @@ h1 {
 .saat[aria-pressed="true"] { background: var(--vurgu-koyu); box-shadow: none; color: #F4FBFB; }
 .slot-bilgi { margin: 0; font-size: 12px; color: var(--etiket); padding-left: 2px; }
 .slot-bos { margin: 0; font-size: 13.5px; color: var(--murekkep-2); }
-@media (max-width: 380px) { .saat-izgara { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 380px) { .saat-izgara { grid-template-columns: repeat(3, 1fr); } }
 
 /* ---------- form başarı ---------- */
 .form-basarili {

@@ -172,29 +172,49 @@ test('kimlik yokken: müsait 503 (ön yüz WhatsApp kipine düşer), randevu 503
 
 /* ---------- sahte Google ile ---------- */
 
-test('müsait saatler: hafta içi, mesai içinde, öğle arası ve dolu saat hariç', async () => {
+test('müsait saatler varsayılan 7/24: hafta sonu ve gece dahil, dolu saat hariç', async () => {
   googleBagla();
   const ilk = await musait();
   assert.equal(ilk.durum, 200);
   assert.equal(ilk.v.hazir, true);
-  assert.ok(ilk.v.gunler.length > 0);
   const enErken = Date.now() + 4 * 3600e3 - 60e3;
+  const haftaGunleri = new Set();
   for (const g of ilk.v.gunler) {
-    for (const s of g.slotlar) {
-      const p = istanbulParcalari(new Date(s.bas));
-      const dk = p.saat * 60 + p.dakika;
-      assert.ok(p.haftaGunu >= 1 && p.haftaGunu <= 5, 'hafta sonu: ' + s.bas);
-      assert.ok(dk >= 9 * 60 && dk + 30 <= 18 * 60, 'mesai dışı: ' + s.bas);
-      assert.ok(dk + 30 <= 12 * 60 + 30 || dk >= 13 * 60 + 30, 'öğle arası: ' + s.bas);
-      assert.ok(new Date(s.bas).getTime() >= enErken, '4 saatten yakın: ' + s.bas);
-    }
+    haftaGunleri.add(g.haftaGunu);
+    for (const s of g.slotlar) assert.ok(new Date(s.bas).getTime() >= enErken, '4 saatten yakın: ' + s.bas);
   }
+  assert.equal(haftaGunleri.size, 7, 'yedi günün hepsi gelmeli');
+  const tamGun = ilk.v.gunler.slice(1, -1).find((g) => g.slotlar.length === 48);
+  assert.ok(tamGun, 'aradaki bir gün 48 yarım saatin hepsini göstermeli');
+  assert.equal(tamGun.slotlar[0].etiket, '00:00');
+  assert.equal(tamGun.slotlar[47].etiket, '23:30');
   const secilen = ilk.v.gunler[0].slotlar[0].bas;
   google.durum.mesgul = [{ start: secilen, end: new Date(new Date(secilen).getTime() + 30 * 60e3).toISOString() }];
   const ikinci = await musait();
   const hepsi = ikinci.v.gunler.flatMap((g) => g.slotlar.map((s) => s.bas));
   assert.ok(!hepsi.includes(secilen), 'dolu saat hâlâ listede');
   assert.equal(google.durum.jetonCagri, 1, 'erişim jetonu bellekte tutulmalı');
+});
+
+test('ortamla daraltılabilir: mesai, hafta sonu, öğle arası, günlük sınır', async () => {
+  googleBagla();
+  Object.assign(process.env, { CALISMA_BASLANGIC: '09:00', CALISMA_BITIS: '18:00', HAFTA_SONU: 'kapali', OGLE_ARASI: '12:30-13:30', GUN_BASINA_EN_FAZLA: '6' });
+  try {
+    const { v } = await musait();
+    assert.ok(v.gunler.length > 0);
+    for (const g of v.gunler) {
+      assert.ok(g.slotlar.length <= 6);
+      for (const s of g.slotlar) {
+        const p = istanbulParcalari(new Date(s.bas));
+        const dk = p.saat * 60 + p.dakika;
+        assert.ok(p.haftaGunu >= 1 && p.haftaGunu <= 5, 'hafta sonu: ' + s.bas);
+        assert.ok(dk >= 9 * 60 && dk + 30 <= 18 * 60, 'mesai dışı: ' + s.bas);
+        assert.ok(dk + 30 <= 12 * 60 + 30 || dk >= 13 * 60 + 30, 'öğle arası: ' + s.bas);
+      }
+    }
+  } finally {
+    for (const k of ['CALISMA_BASLANGIC', 'CALISMA_BITIS', 'HAFTA_SONU', 'OGLE_ARASI', 'GUN_BASINA_EN_FAZLA']) delete process.env[k];
+  }
 });
 
 test('★ randevu: doğru saatte etkinlik, davet, sahibine e-posta', async () => {

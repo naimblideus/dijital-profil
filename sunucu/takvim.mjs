@@ -3,17 +3,21 @@
 
 export const ISTANBUL_OFSET = 3;
 
+// Varsayılan 7/24 açık (kullanıcı kararı 2026-10-04: "talep için 7/24 açık olsun").
+// Daraltmak için Coolify ortamı: CALISMA_BASLANGIC=09:00, CALISMA_BITIS=18:00,
+// HAFTA_SONU=kapali, OGLE_ARASI=12:30-13:30, GUN_BASINA_EN_FAZLA=6.
 const VARSAYILAN = {
-  baslangicSaat: 9,      // 09:00
+  baslangicSaat: 0,      // 00:00
   baslangicDakika: 0,
-  bitisSaat: 18,         // 18:00
+  bitisSaat: 24,         // 24:00
   bitisDakika: 0,
   slotDakika: 30,
-  oglePaydosBaslangic: 12 * 60 + 30,  // 12:30
-  oglePaydosBitis: 13 * 60 + 30,      // 13:30
+  oglePaydosBaslangic: null,
+  oglePaydosBitis: null,
+  haftaSonu: true,
   ilerideGun: 14,        // kaç gün ileriye bakılsın
   enAzHaberSaat: 4,      // en erken kaç saat sonrası teklif edilsin
-  gunBasinaEnFazla: 6    // bir günde gösterilecek en fazla slot
+  gunBasinaEnFazla: 0    // 0 = sınırsız
 };
 
 // Adresler ortamdan okunabilir: testler sahte Google sunucusuna yönlendirir.
@@ -32,10 +36,16 @@ export function ayarlar() {
   };
   const bas = saatAyristir(s('CALISMA_BASLANGIC', ''), VARSAYILAN.baslangicSaat, VARSAYILAN.baslangicDakika);
   const bit = saatAyristir(s('CALISMA_BITIS', ''), VARSAYILAN.bitisSaat, VARSAYILAN.bitisDakika);
+  const ogle = /^(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})$/.exec(String(s('OGLE_ARASI', '')).replace(/\s/g, ''));
+  const enFazla = Number(s('GUN_BASINA_EN_FAZLA', VARSAYILAN.gunBasinaEnFazla));
   return {
     ...VARSAYILAN,
     baslangicSaat: bas.saat, baslangicDakika: bas.dakika,
     bitisSaat: bit.saat, bitisDakika: bit.dakika,
+    oglePaydosBaslangic: ogle ? +ogle[1] * 60 + +ogle[2] : null,
+    oglePaydosBitis: ogle ? +ogle[3] * 60 + +ogle[4] : null,
+    haftaSonu: String(s('HAFTA_SONU', 'acik')).toLowerCase() !== 'kapali',
+    gunBasinaEnFazla: Number.isFinite(enFazla) && enFazla > 0 ? enFazla : 0,
     slotDakika: Number(s('SLOT_DAKIKA', VARSAYILAN.slotDakika)) || VARSAYILAN.slotDakika,
     ilerideGun: Number(s('ILERIDE_GUN', VARSAYILAN.ilerideGun)) || VARSAYILAN.ilerideGun,
     enAzHaberSaat: Number(s('EN_AZ_HABER_SAAT', VARSAYILAN.enAzHaberSaat)) || VARSAYILAN.enAzHaberSaat,
@@ -123,14 +133,14 @@ export function slotlariUret(simdi, araliklar, a) {
   for (let i = 0; i < a.ilerideGun; i++) {
     const temel = new Date(simdi.getTime() + i * 86400e3);
     const p = istanbulParcalari(temel);
-    if (p.haftaGunu === 0 || p.haftaGunu === 6) continue;   // hafta sonu
+    if (!a.haftaSonu && (p.haftaGunu === 0 || p.haftaGunu === 6)) continue;
 
     const slotlar = [];
     const basDk = a.baslangicSaat * 60 + a.baslangicDakika;
     const bitDk = a.bitisSaat * 60 + a.bitisDakika;
 
     for (let dk = basDk; dk + a.slotDakika <= bitDk; dk += a.slotDakika) {
-      if (dk < a.oglePaydosBitis && dk + a.slotDakika > a.oglePaydosBaslangic) continue; // öğle
+      if (a.oglePaydosBaslangic !== null && dk < a.oglePaydosBitis && dk + a.slotDakika > a.oglePaydosBaslangic) continue; // öğle
       const sBas = istanbulDan(p.yil, p.ay, p.gun, Math.floor(dk / 60), dk % 60);
       const sBit = new Date(sBas.getTime() + a.slotDakika * 60000);
       if (sBas < enErken) continue;
@@ -139,7 +149,7 @@ export function slotlariUret(simdi, araliklar, a) {
         bas: sBas.toISOString(),
         etiket: String(Math.floor(dk / 60)).padStart(2, '0') + ':' + String(dk % 60).padStart(2, '0')
       });
-      if (slotlar.length >= a.gunBasinaEnFazla) break;
+      if (a.gunBasinaEnFazla && slotlar.length >= a.gunBasinaEnFazla) break;
     }
     if (slotlar.length) {
       gunler.push({
