@@ -321,6 +321,14 @@
         <option value="Avrupa Ar-Ge" data-tr="Avrupa Ar-Ge ve fon programları" data-en="European R&amp;D and funding">Avrupa Ar-Ge ve fon programları</option>
       </select>
     </label>
+    <label class="alan">
+      <span class="alan-etiket" data-tr="Görüşme şekli" data-en="Meeting type">Görüşme şekli</span>
+      <select id="r-sekil" name="sekil">
+        <option value="meet" data-tr="Görüntülü — Google Meet" data-en="Video — Google Meet">Görüntülü — Google Meet</option>
+        <option value="telefon" data-tr="Telefon — sizi ararım" data-en="Phone — I will call you">Telefon — sizi ararım</option>
+        <option value="yuzyuze" data-tr="Yüz yüze — Medipol Teknopark" data-en="In person — Medipol Teknopark">Yüz yüze — Medipol Teknopark</option>
+      </select>
+    </label>
     <label class="alan" id="alan-eposta" hidden>
       <span class="alan-etiket"><span data-tr="E-posta" data-en="Email">E-posta</span> <span class="istege-bagli" data-tr="takvim daveti için" data-en="for the calendar invite">takvim daveti için</span></span>
       <input type="email" id="r-eposta" name="eposta" autocomplete="email" inputmode="email">
@@ -356,6 +364,11 @@
     <p class="basari-baslik" data-tr="Talebiniz ulaştı." data-en="Your request has arrived.">Talebiniz ulaştı.</p>
     <p class="basari-alt" id="basari-alt" data-tr="En kısa sürede size dönüş yapacağım. Acele bir konuysa doğrudan arayabilirsiniz." data-en="I will get back to you shortly. If it is urgent, feel free to call directly.">En kısa sürede size dönüş yapacağım. Acele bir konuysa doğrudan arayabilirsiniz.</p>
     <p class="basari-randevu" id="basari-randevu" hidden></p>
+    <a class="dugme" id="basari-meet" href="#" target="_blank" rel="noopener" hidden>
+      <svg class="ik" aria-hidden="true"><use href="#i-takvim"/></svg>
+      <span data-tr="Google Meet linkini aç" data-en="Open the Google Meet link">Google Meet linkini aç</span>
+    </a>
+    <p class="basari-meet-adres" id="basari-meet-adres" hidden></p>
     <a class="dugme dugme-ikincil" href="tel:+905526961703">
       <svg class="ik" aria-hidden="true"><use href="#i-phone"/></svg>
       <span data-tr="Şimdi ara" data-en="Call now">Şimdi ara</span>

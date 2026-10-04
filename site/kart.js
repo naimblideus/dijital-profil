@@ -33,12 +33,31 @@
     tr: 'Görüşmeyi takvimime yazdım. E-posta verdiyseniz davet de gönderildi.',
     en: 'The meeting is on my calendar. If you gave an email, an invite has been sent.'
   };
+  // Başarı ekranında görüşmenin nasıl olacağı.
+  var SEKIL_ALT = {
+    meet: {
+      tr: 'Görüşme Google Meet’te. Saatinde aşağıdaki linke tıklamanız yeterli; e-posta verdiyseniz link davette de var.',
+      en: 'The meeting is on Google Meet. Just open the link below at the time; if you gave an email, it is in the invite too.'
+    },
+    meetLinksiz: {
+      tr: 'Görüşme Google Meet’te. Link takvim davetinde olacak; e-posta vermediyseniz arayıp linki ileteceğim.',
+      en: 'The meeting is on Google Meet. The link will be in the calendar invite; if you gave no email, I will call and send it.'
+    },
+    telefon: {
+      tr: 'Seçtiğiniz saatte sizi yazdığınız numaradan arayacağım.',
+      en: 'I will call you at the number you gave, at the time you picked.'
+    },
+    yuzyuze: {
+      tr: 'Görüşme Medipol Teknopark’taki ofisimizde: Ekinciler Cd. No: 19, Kavacık, Beykoz.',
+      en: 'We meet at our office in Medipol Teknopark: Ekinciler Cd. No: 19, Kavacık, Beykoz.'
+    }
+  };
   // Takvim bağlı değilken talep WhatsApp mesajı olarak gider.
   var WA_GONDER = { tr: 'WhatsApp ile gönder', en: 'Send via WhatsApp' };
   var WA_GIRIS = { tr: 'Merhaba Naim Bey, görüşme talebim:', en: 'Hello Mr. Çetin, my meeting request:' };
   var WA_ETIKET = {
-    tr: { ad: 'Ad Soyad', firma: 'Firma', telefon: 'Telefon', cozum: 'İlgilendiğim çözüm', zaman: 'Uygun zamanım' },
-    en: { ad: 'Name', firma: 'Company', telefon: 'Phone', cozum: 'Solution', zaman: 'Preferred time' }
+    tr: { ad: 'Ad Soyad', firma: 'Firma', telefon: 'Telefon', cozum: 'İlgilendiğim çözüm', sekil: 'Görüşme şekli', zaman: 'Uygun zamanım' },
+    en: { ad: 'Name', firma: 'Company', telefon: 'Phone', cozum: 'Solution', sekil: 'Meeting type', zaman: 'Preferred time' }
   };
   var WA_BASLIK = { tr: 'Son adım WhatsApp’ta.', en: 'Last step is in WhatsApp.' };
   var WA_ALT = {
@@ -190,6 +209,8 @@
   var basariRandevu = D.getElementById('basari-randevu');
   var basariAlt = D.getElementById('basari-alt');
   var basariBaslik = rBasarili.querySelector('.basari-baslik');
+  var basariMeet = D.getElementById('basari-meet');
+  var basariMeetAdres = D.getElementById('basari-meet-adres');
 
   var takvimKipi = false;   // true: canlı slot seçimi, false: serbest metin + WhatsApp
 
@@ -286,7 +307,7 @@
   });
   rKapat.addEventListener('click', sheetKapat);
 
-  function basariGoster(saatMetni, whatsappKipi) {
+  function basariGoster(saatMetni, whatsappKipi, sonuc) {
     rForm.hidden = true;
     rBasarili.hidden = false;
     if (saatMetni) {
@@ -297,6 +318,16 @@
     if (whatsappKipi) {
       metinAyarla(basariBaslik, WA_BASLIK);
       metinAyarla(basariAlt, WA_ALT);
+    }
+    if (sonuc) {
+      var anahtar = sonuc.sekil === 'meet' ? (sonuc.meet ? 'meet' : 'meetLinksiz') : sonuc.sekil;
+      if (SEKIL_ALT[anahtar]) metinAyarla(basariAlt, SEKIL_ALT[anahtar]);
+      if (sonuc.meet && /^https:\/\/meet\.google\.com\//.test(sonuc.meet)) {
+        basariMeet.href = sonuc.meet;
+        basariMeet.hidden = false;
+        basariMeetAdres.textContent = sonuc.meet.replace('https://', '');
+        basariMeetAdres.hidden = false;
+      }
     }
     rSheet.scrollTop = 0;
   }
@@ -339,6 +370,7 @@
           eposta: D.getElementById('r-eposta').value,
           cozum: D.getElementById('r-cozum').value,
           baslangic: basAlan.value,
+          sekil: D.getElementById('r-sekil').value,
           sirketAdi: D.getElementById('r-sirket').value
         })
       }).then(function (y) {
@@ -351,7 +383,7 @@
           return;
         }
         if (!c.v.tamam) throw new Error(c.v.sebep || 'bilinmeyen');
-        basariGoster(okunur);
+        basariGoster(okunur, false, c.v);
       }).catch(function () { basarisiz(); });
       return;
     }
@@ -366,6 +398,8 @@
     ];
     var cozumSecim = D.getElementById('r-cozum');
     if (cozumSecim.value) satirlar.push(et.cozum + ': ' + cozumSecim.options[cozumSecim.selectedIndex].textContent);
+    var sekilSecim = D.getElementById('r-sekil');
+    satirlar.push(et.sekil + ': ' + sekilSecim.options[sekilSecim.selectedIndex].textContent);
     if (deger('r-zaman')) satirlar.push(et.zaman + ': ' + deger('r-zaman'));
     var waAdres = 'https://wa.me/905526961703?text=' + encodeURIComponent(satirlar.join('\n'));
     var pencere = window.open(waAdres, '_blank');

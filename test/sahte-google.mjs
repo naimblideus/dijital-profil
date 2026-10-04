@@ -10,7 +10,8 @@ export async function sahteGoogleBaslat(port = 0) {
     etkinlikler: [],   // { takvim, sendUpdates, govde }
     epostalar: [],     // çözülmüş ham ileti
     takvimHata: false,
-    gmailHata: false
+    gmailHata: false,
+    meetYok: false     // Google Meet linkini hemen vermezse
   };
 
   const sunucu = http.createServer((istek, cevap) => {
@@ -48,9 +49,14 @@ export async function sahteGoogleBaslat(port = 0) {
       const e = /^\/calendar\/v3\/calendars\/([^/]+)\/events$/.exec(url.pathname);
       if (e && istek.method === 'POST') {
         const etkinlik = JSON.parse(govde);
-        durum.etkinlikler.push({ takvim: decodeURIComponent(e[1]), sendUpdates: url.searchParams.get('sendUpdates'), govde: etkinlik });
+        const surum = url.searchParams.get('conferenceDataVersion');
+        durum.etkinlikler.push({ takvim: decodeURIComponent(e[1]), sendUpdates: url.searchParams.get('sendUpdates'), surum, govde: etkinlik });
         durum.mesgul.push({ start: etkinlik.start.dateTime, end: etkinlik.end.dateTime });
-        return gonder(200, { id: 'etk' + durum.etkinlikler.length, htmlLink: 'https://calendar.google.com/event?eid=sahte' });
+        const cevapGovde = { id: 'etk' + durum.etkinlikler.length, htmlLink: 'https://calendar.google.com/event?eid=sahte' };
+        if (surum === '1' && etkinlik.conferenceData && etkinlik.conferenceData.createRequest && !durum.meetYok) {
+          cevapGovde.hangoutLink = 'https://meet.google.com/abc-defg-hij';
+        }
+        return gonder(200, cevapGovde);
       }
 
       if (url.pathname === '/gmail/v1/users/me/messages/send') {

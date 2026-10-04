@@ -27,7 +27,7 @@ node test/yerel.mjs 3091 --takvimsiz   # WhatsApp kipi
 | Yol | İş |
 |---|---|
 | `GET /api/musait` | Önümüzdeki 14 günün boş 30 dakikalık slotları — varsayılan her gün 08:00–24:00, en erken 4 saat sonrası |
-| `POST /api/randevu` | Slotu yazmadan önce tekrar sorar (çakışmada 409), etkinliği açar, e-posta verildiyse davet gönderir, sahibine e-posta atar |
+| `POST /api/randevu` | Slotu yazmadan önce tekrar sorar (çakışmada 409), etkinliği açar (`sekil`: `meet` varsayılan → Google Meet linki; `telefon`; `yuzyuze` → ofis adresi), e-posta verildiyse davet gönderir, sahibine e-posta atar |
 | `GET /saglik` | Docker sağlık kontrolü |
 
 Aynı adresten 10 dakikada en fazla 5, herkesten saatte en fazla 40 talep.
@@ -46,6 +46,7 @@ Domains `https://naim.nextusservis.com`.
 | `CALISMA_BASLANGIC` / `CALISMA_BITIS` | hayır | Varsayılan `08:00` / `24:00`, hafta sonu dahil |
 | `HAFTA_SONU` · `OGLE_ARASI` · `GUN_BASINA_EN_FAZLA` | hayır | `kapali` · `12:30-13:30` · `6` yazılırsa daralır; varsayılan açık, yok, sınırsız |
 | `SLOT_DAKIKA` · `ILERIDE_GUN` · `EN_AZ_HABER_SAAT` | hayır | 30 · 14 · 4 |
+| `OFIS_ADRESI` | hayır | Yüz yüze görüşmede etkinliğe yazılan adres (varsayılan Medipol Teknopark) |
 | `TAKVIM_IDLER` | hayır | Virgülle; boş/dolu hepsinden okunur, etkinlik ilkine yazılır. Varsayılan `primary` |
 
 Google bulut projesinde OAuth onay ekranı **yayında (In production)** olmalı; "Testing"

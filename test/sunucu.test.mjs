@@ -29,7 +29,7 @@ function googleBagla() {
     GOOGLE_API_KOK: google.kok,
     GOOGLE_GMAIL_KOK: google.kok
   });
-  Object.assign(google.durum, { mesgul: [], etkinlikler: [], epostalar: [], jetonCagri: 0, takvimHata: false, gmailHata: false });
+  Object.assign(google.durum, { mesgul: [], etkinlikler: [], epostalar: [], jetonCagri: 0, takvimHata: false, gmailHata: false, meetYok: false });
   jetonBelleginiSil();
 }
 
@@ -217,12 +217,12 @@ test('ortamla daraltılabilir: mesai, hafta sonu, öğle arası, günlük sını
   }
 });
 
-test('★ randevu: doğru saatte etkinlik, davet, sahibine e-posta', async () => {
+test('★ randevu: doğru saatte etkinlik, davet, varsayılan Meet linki, sahibine e-posta', async () => {
   googleBagla();
   const slot = (await musait()).v.gunler[0].slotlar[0].bas;
   const c = await randevuGonder({ ...GECERLI, baslangic: slot });
   assert.equal(c.durum, 200);
-  assert.deepEqual(c.v, { tamam: true, baslangic: slot, davet: true });
+  assert.deepEqual(c.v, { tamam: true, baslangic: slot, davet: true, sekil: 'meet', meet: 'https://meet.google.com/abc-defg-hij' });
 
   const [e] = google.durum.etkinlikler;
   assert.equal(google.durum.etkinlikler.length, 1);
@@ -230,7 +230,10 @@ test('★ randevu: doğru saatte etkinlik, davet, sahibine e-posta', async () =>
   assert.equal(e.sendUpdates, 'all');
   assert.equal(e.govde.start.dateTime, slot);
   assert.equal(new Date(e.govde.end.dateTime) - new Date(slot), 30 * 60e3);
-  assert.equal(e.govde.summary, 'Görüşme — Örnek Fotokopi');
+  assert.equal(e.govde.summary, 'Görüşme — Örnek Fotokopi (Google Meet)');
+  assert.equal(e.surum, '1', 'Meet için conferenceDataVersion=1 şart');
+  assert.equal(e.govde.conferenceData.createRequest.conferenceSolutionKey.type, 'hangoutsMeet');
+  assert.ok(e.govde.conferenceData.createRequest.requestId);
   assert.match(e.govde.description, /Telefon: 0532 000 00 00/);
   assert.deepEqual(e.govde.attendees, [{ email: 'ayse@ornek.com', displayName: 'Ayşe Yılmaz' }]);
 
@@ -242,6 +245,37 @@ test('★ randevu: doğru saatte etkinlik, davet, sahibine e-posta', async () =>
   const metin = Buffer.from(ileti.split('\r\n\r\n')[1].replace(/\r\n/g, ''), 'base64').toString('utf8');
   assert.match(metin, /Ayşe Yılmaz \(Örnek Fotokopi\) görüşme istedi/);
   assert.match(metin, /Takvimde aç: https:\/\/calendar\.google\.com/);
+  assert.match(metin, /Şekil: Google Meet — https:\/\/meet\.google\.com\/abc-defg-hij/);
+});
+
+test('görüşme şekli: telefon ve yüz yüzede Meet açılmaz, yer yazılır; geçersiz şekil Meet olur', async () => {
+  googleBagla();
+  const slotlar = (await musait()).v.gunler[1].slotlar;
+  const tel = await randevuGonder({ ...GECERLI, sekil: 'telefon', baslangic: slotlar[0].bas });
+  assert.equal(tel.v.sekil, 'telefon');
+  assert.equal(tel.v.meet, null);
+  const yuz = await randevuGonder({ ...GECERLI, sekil: 'yuzyuze', baslangic: slotlar[1].bas });
+  assert.equal(yuz.v.sekil, 'yuzyuze');
+  const tuhaf = await randevuGonder({ ...GECERLI, sekil: '__proto__', baslangic: slotlar[2].bas });
+  assert.equal(tuhaf.v.sekil, 'meet');
+  const [eTel, eYuz, eTuhaf] = google.durum.etkinlikler;
+  assert.equal(eTel.govde.conferenceData, undefined);
+  assert.equal(eTel.surum, null);
+  assert.equal(eTel.govde.location, 'Telefon: 0532 000 00 00');
+  assert.match(eTel.govde.description, /Görüşme şekli: Telefon — bu numara aranacak/);
+  assert.match(eYuz.govde.location, /Medipol Teknopark/);
+  assert.equal(eYuz.govde.summary, 'Görüşme — Örnek Fotokopi (Yüz yüze)');
+  assert.ok(eTuhaf.govde.conferenceData);
+});
+
+test('Google Meet linkini hemen vermezse randevu yine açılır, link null döner', async () => {
+  googleBagla();
+  google.durum.meetYok = true;
+  const slot = (await musait()).v.gunler[0].slotlar[0].bas;
+  const c = await randevuGonder({ ...GECERLI, baslangic: slot });
+  assert.equal(c.durum, 200);
+  assert.equal(c.v.meet, null);
+  assert.equal(google.durum.etkinlikler.length, 1);
 });
 
 test('aynı saati ikinci kişi seçerse 409, ikinci etkinlik açılmaz', async () => {

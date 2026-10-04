@@ -1,7 +1,18 @@
 import { ayarlar, kimlikVarMi, erisimJetonu, mesgulAraliklar, cakisiyorMu, jsonCevap, takvimKoku } from './takvim.mjs';
 import { sahibeBildir } from './bildirim.mjs';
+import { randomUUID } from 'node:crypto';
 
 const EPOSTA_DESENI = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+// Ziyaretçi görüşme şeklini seçer; geçersiz ya da boşsa Meet.
+const SEKIL_ADI = { meet: 'Google Meet', telefon: 'Telefon', yuzyuze: 'Yüz yüze' };
+const ofisAdresi = () => process.env.OFIS_ADRESI || 'Medipol Teknopark, Ekinciler Cd. No: 19, Kavacık, 34810 Beykoz/İstanbul';
+
+/** Google'dan gelen linki yalnız gerçek bir Meet adresiyse dışarı verir. */
+function meetLinki(e) {
+  const aday = e.hangoutLink || ((e.conferenceData && e.conferenceData.entryPoints) || []).find((p) => p.entryPointType === 'video')?.uri;
+  return /^https:\/\/meet\.google\.com\/[a-z0-9-]+$/i.test(String(aday || '')) ? aday : null;
+}
 
 function temizle(metin, enFazla) {
   return String(metin == null ? '' : metin).replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, enFazla);
@@ -27,6 +38,7 @@ export default async (istek) => {
   const cozum = temizle(govde.cozum, 80);
   const not = temizle(govde.not, 600);
   const basISO = temizle(govde.baslangic, 40);
+  const sekil = Object.hasOwn(SEKIL_ADI, govde.sekil) ? govde.sekil : 'meet';
 
   if (!ad || !firma || !telefon) return jsonCevap({ tamam: false, sebep: 'eksik-alan' }, 400);
   if (eposta && !EPOSTA_DESENI.test(eposta)) return jsonCevap({ tamam: false, sebep: 'eposta-gecersiz' }, 400);
@@ -49,23 +61,31 @@ export default async (istek) => {
       `Kişi: ${ad}`,
       `Telefon: ${telefon}`,
       eposta ? `E-posta: ${eposta}` : null,
+      `Görüşme şekli: ${SEKIL_ADI[sekil]}${sekil === 'telefon' ? ' — bu numara aranacak' : ''}`,
       cozum ? `İlgilendiği çözüm: ${cozum}` : null,
       not ? `\nNot:\n${not}` : null,
       `\nDijital profil üzerinden talep edildi.`
     ].filter(Boolean);
 
     const etkinlik = {
-      summary: `Görüşme — ${firma}`,
+      summary: `Görüşme — ${firma} (${SEKIL_ADI[sekil]})`,
       description: satirlar.join('\n'),
       start: { dateTime: bas.toISOString(), timeZone: 'Europe/Istanbul' },
       end: { dateTime: bit.toISOString(), timeZone: 'Europe/Istanbul' },
       reminders: { useDefault: false, overrides: [{ method: 'popup', minutes: 30 }] }
     };
     if (eposta) etkinlik.attendees = [{ email: eposta, displayName: ad }];
+    if (sekil === 'meet') {
+      etkinlik.conferenceData = { createRequest: { requestId: randomUUID(), conferenceSolutionKey: { type: 'hangoutsMeet' } } };
+    } else if (sekil === 'yuzyuze') {
+      etkinlik.location = ofisAdresi();
+    } else {
+      etkinlik.location = `Telefon: ${telefon}`;
+    }
 
     const takvimId = a.takvimler[0] || 'primary';
     const y = await fetch(
-      `${takvimKoku()}/calendar/v3/calendars/${encodeURIComponent(takvimId)}/events?sendUpdates=${eposta ? 'all' : 'none'}`,
+      `${takvimKoku()}/calendar/v3/calendars/${encodeURIComponent(takvimId)}/events?sendUpdates=${eposta ? 'all' : 'none'}${sekil === 'meet' ? '&conferenceDataVersion=1' : ''}`,
       {
         method: 'POST',
         headers: { Authorization: 'Bearer ' + jeton, 'Content-Type': 'application/json' },
@@ -74,19 +94,23 @@ export default async (istek) => {
     );
     if (!y.ok) throw new Error('etkinlik yazilamadi: ' + y.status + ' ' + (await y.text()).slice(0, 200));
     const e = await y.json();
-    console.log('[randevu] etkinlik acildi', e.id);
+    const meet = sekil === 'meet' ? meetLinki(e) : null;
+    console.log('[randevu] etkinlik acildi', e.id, sekil);
 
     // Bildirim gitmese de randevu açıldı; ziyaretçiye hata gösterilmez.
     const kime = process.env.BILDIRIM_EPOSTA;
     if (kime) {
       try {
-        await sahibeBildir(jeton, kime, { ad, firma, telefon, eposta, cozum, bas, dakika: a.slotDakika, link: e.htmlLink });
+        await sahibeBildir(jeton, kime, {
+          ad, firma, telefon, eposta, cozum, bas, dakika: a.slotDakika, link: e.htmlLink,
+          sekil, meet, adres: ofisAdresi()
+        });
       } catch (h) {
         console.error('[randevu]', String(h.message || h).slice(0, 300));
       }
     }
 
-    return jsonCevap({ tamam: true, baslangic: bas.toISOString(), davet: Boolean(eposta) });
+    return jsonCevap({ tamam: true, baslangic: bas.toISOString(), davet: Boolean(eposta), sekil, meet });
   } catch (h) {
     console.error('[randevu]', String(h.message || h).slice(0, 300));
     return jsonCevap({ tamam: false, sebep: 'takvim-hatasi' }, 502);

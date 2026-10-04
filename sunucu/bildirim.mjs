@@ -23,6 +23,9 @@ export async function sahibeBildir(jeton, kime, t) {
     `${t.ad} (${t.firma}) görüşme istedi.`,
     '',
     `Zaman: ${zaman} (İstanbul, ${t.dakika} dk)`,
+    t.sekil === 'telefon' ? `Şekil: Telefon — sen arayacaksın (${t.telefon})`
+      : t.sekil === 'yuzyuze' ? `Şekil: Yüz yüze — ${t.adres}`
+      : `Şekil: Google Meet — ${t.meet || 'link takvimdeki etkinlikte'}`,
     `Telefon: ${t.telefon}`,
     t.eposta ? `E-posta: ${t.eposta} — takvim daveti gönderildi` : 'E-posta vermedi, davet gitmedi.',
     t.cozum ? `İlgilendiği çözüm: ${t.cozum}` : null,
