@@ -167,6 +167,15 @@ h1 {
 .randevu-dugme:hover { background: var(--kart-2); box-shadow: inset 0 0 0 1px rgba(61, 184, 188, .55); }
 .randevu-dugme:active { transform: scale(.985); }
 
+/* ---------- Instagram kipi (?ig): numara görünmez ---------- */
+.ig [data-numara], .ig .aksiyon { display: none !important; }
+.ig .randevu-dugme {
+  margin-top: 18px;
+  background: var(--vurgu-koyu); box-shadow: none; color: #F4FBFB;
+}
+.ig .randevu-dugme .ik { color: #F4FBFB; }
+.ig .randevu-dugme:hover, .ig .randevu-dugme:focus-visible { background: var(--vurgu); box-shadow: none; }
+
 /* ---------- form ---------- */
 .form { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
 .bal { position: absolute; left: -9999px; }

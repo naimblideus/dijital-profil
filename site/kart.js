@@ -65,6 +65,23 @@
     en: 'The message is ready. Your request reaches me once you tap send in WhatsApp.'
   };
 
+  // Instagram kipi (?ig): numara hiçbir yerde görünmez; takvim yedeği WhatsApp yerine e-posta.
+  var IG = D.documentElement.classList.contains('ig');
+  var EPOSTA = 'mehmet1703naim@gmail.com';
+  var EP_GONDER = { tr: 'E-posta ile gönder', en: 'Send via email' };
+  var EP_KONU = { tr: 'Görüşme talebi', en: 'Meeting request' };
+  var EP_BASLIK = { tr: 'Son adım e-postada.', en: 'Last step is in your email.' };
+  var EP_ALT = {
+    tr: 'Mesaj hazır. E-postada gönder’e bastığınızda talebiniz bana ulaşır.',
+    en: 'The message is ready. Your request reaches me once you tap send in your email.'
+  };
+  if (IG) {
+    HATA = {
+      tr: 'Talep gönderilemedi. Lütfen tekrar deneyin ya da ' + EPOSTA + ' adresine yazın.',
+      en: 'The request could not be sent. Please try again or write to ' + EPOSTA + '.'
+    };
+  }
+
   /* ---------- dil ---------- */
   var dilBtn = { tr: D.getElementById('dil-tr'), en: D.getElementById('dil-en') };
   var cevrilecek = D.querySelectorAll('[data-tr]');
@@ -170,7 +187,7 @@
   var qrHazir = false;
 
   function sayfaAdresi() {
-    return location.origin + location.pathname.replace(/index\.html$/, '');
+    return location.origin + location.pathname.replace(/index\.html$/, '') + (IG ? '?ig' : '');
   }
   function qrUret() {
     if (qrHazir || typeof qrcode !== 'function') return;
@@ -278,7 +295,7 @@
     slotlarKutu.hidden = true;
     alanZaman.hidden = false;
     alanEposta.hidden = true;
-    metinAyarla(rGonder.querySelector('span'), WA_GONDER);
+    metinAyarla(rGonder.querySelector('span'), IG ? EP_GONDER : WA_GONDER);
   }
 
   function slotlariYukle() {
@@ -316,8 +333,8 @@
       metinAyarla(basariAlt, RANDEVU_ALT);
     }
     if (whatsappKipi) {
-      metinAyarla(basariBaslik, WA_BASLIK);
-      metinAyarla(basariAlt, WA_ALT);
+      metinAyarla(basariBaslik, IG ? EP_BASLIK : WA_BASLIK);
+      metinAyarla(basariAlt, IG ? EP_ALT : WA_ALT);
     }
     if (sonuc) {
       var anahtar = sonuc.sekil === 'meet' ? (sonuc.meet ? 'meet' : 'meetLinksiz') : sonuc.sekil;
@@ -401,10 +418,16 @@
     var sekilSecim = D.getElementById('r-sekil');
     satirlar.push(et.sekil + ': ' + sekilSecim.options[sekilSecim.selectedIndex].textContent);
     if (deger('r-zaman')) satirlar.push(et.zaman + ': ' + deger('r-zaman'));
-    var waAdres = 'https://wa.me/905526961703?text=' + encodeURIComponent(satirlar.join('\n'));
-    var pencere = window.open(waAdres, '_blank');
-    if (pencere) { try { pencere.opener = null; } catch (h) {} }
-    else window.location.href = waAdres;
+    if (IG) {
+      window.location.href = 'mailto:' + EPOSTA +
+        '?subject=' + encodeURIComponent(EP_KONU[dil]) +
+        '&body=' + encodeURIComponent(satirlar.join('\n'));
+    } else {
+      var waAdres = 'https://wa.me/905526961703?text=' + encodeURIComponent(satirlar.join('\n'));
+      var pencere = window.open(waAdres, '_blank');
+      if (pencere) { try { pencere.opener = null; } catch (h) {} }
+      else window.location.href = waAdres;
+    }
     rGonder.disabled = false;
     etiket.textContent = eskiMetin;
     basariGoster(null, true);

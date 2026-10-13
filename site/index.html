@@ -2,6 +2,7 @@
 <html lang="tr">
 <head>
 <meta charset="utf-8">
+<script>if(/[?&]ig(?:[=&]|$)/.test(location.search))document.documentElement.classList.add('ig');</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Mehmet Naim Çetin — Nextus</title>
 <meta name="description" content="Kurucu, Nextus. Sanayi ve hizmet işletmeleri için kurumsal yazılım. Fraunhofer Türkiye temsilcisi.">
@@ -81,11 +82,11 @@
     </div>
 
     <nav class="aksiyon" aria-label="İletişim">
-      <a class="kutu" href="tel:+905526961703">
+      <a class="kutu" href="tel:+905526961703" data-numara>
         <svg class="ik" aria-hidden="true"><use href="#i-phone"/></svg>
         <span data-tr="Ara" data-en="Call">Ara</span>
       </a>
-      <a class="kutu" id="wa" href="https://wa.me/905526961703?text=Merhaba%20Naim%20Bey%2C%20" target="_blank" rel="noopener">
+      <a class="kutu" id="wa" data-numara href="https://wa.me/905526961703?text=Merhaba%20Naim%20Bey%2C%20" target="_blank" rel="noopener">
         <svg class="ik" aria-hidden="true"><use href="#i-whatsapp"/></svg>
         <span>WhatsApp</span>
       </a>
@@ -93,7 +94,7 @@
         <svg class="ik" aria-hidden="true"><use href="#i-mail"/></svg>
         <span data-tr="E-posta" data-en="Email">E-posta</span>
       </a>
-      <a class="kutu kutu-dolu" href="mehmet-naim-cetin.vcf" download="mehmet-naim-cetin.vcf">
+      <a class="kutu kutu-dolu" data-numara href="mehmet-naim-cetin.vcf" download="mehmet-naim-cetin.vcf">
         <svg class="ik" aria-hidden="true"><use href="#i-save"/></svg>
         <span data-tr="Kaydet" data-en="Save">Kaydet</span>
       </a>
@@ -205,14 +206,14 @@
     <section class="bolum iletisim">
       <h2 data-tr="İletişim" data-en="Contact">İletişim</h2>
       <div class="grup">
-        <div class="ilet-satir">
+        <div class="ilet-satir" data-numara>
           <a class="ilet-link" href="tel:+905526961703">
             <svg class="ik" aria-hidden="true"><use href="#i-phone"/></svg>
             <span class="ilet-deger num">+90 552 696 17 03</span>
           </a>
           <button type="button" class="kopyala" data-kopya="+90 552 696 17 03" aria-label="Telefonu kopyala"><svg class="ik" aria-hidden="true"><use href="#i-copy"/></svg></button>
         </div>
-        <div class="ilet-satir">
+        <div class="ilet-satir" data-numara>
           <a class="ilet-link" id="wa-satir" href="https://wa.me/905526961703?text=Merhaba%20Naim%20Bey%2C%20" target="_blank" rel="noopener">
             <svg class="ik" aria-hidden="true"><use href="#i-whatsapp"/></svg>
             <span class="ilet-deger">WhatsApp <span class="soluk">· +90 552 696 17 03</span></span>
@@ -369,7 +370,7 @@
       <span data-tr="Google Meet linkini aç" data-en="Open the Google Meet link">Google Meet linkini aç</span>
     </a>
     <p class="basari-meet-adres" id="basari-meet-adres" hidden></p>
-    <a class="dugme dugme-ikincil" href="tel:+905526961703">
+    <a class="dugme dugme-ikincil" data-numara href="tel:+905526961703">
       <svg class="ik" aria-hidden="true"><use href="#i-phone"/></svg>
       <span data-tr="Şimdi ara" data-en="Call now">Şimdi ara</span>
     </a>
