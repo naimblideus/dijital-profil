@@ -1,11 +1,16 @@
 FROM node:24-alpine
 
-ENV NODE_ENV=production PORT=3000
+ENV NODE_ENV=production PORT=3000 PLAN_VERI=/app/veri
 WORKDIR /app
 
 # Harici paket yok: npm install adımı da yok.
 COPY site ./site
 COPY sunucu ./sunucu
+
+# DeepCore planının verisi kalıcı birimde durur (Coolify → Storages → /app/veri).
+# Klasör node kullanıcısına ait açılır; boş bir birim bağlandığında bu sahipliği devralır,
+# yoksa uygulama birime yazamaz. Birim yoksa plan çalışır ama arayüz "kalıcı değil" der.
+RUN mkdir -p /app/veri && chown node:node /app/veri
 
 USER node
 EXPOSE 3000

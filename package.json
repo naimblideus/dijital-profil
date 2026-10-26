@@ -6,6 +6,6 @@
   "engines": { "node": ">=22" },
   "scripts": {
     "start": "node sunucu/sunucu.mjs",
-    "test": "node --test test/sunucu.test.mjs"
+    "test": "node --test test/sunucu.test.mjs test/plan.test.mjs"
   }
 }

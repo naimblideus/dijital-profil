@@ -1,4 +1,4 @@
-/* Dijital profil sunucusu — statik site + iki takvim ucu. Harici paket yok.
+/* Dijital profil sunucusu — statik site + iki takvim ucu + DeepCore planı (/plan). Harici paket yok.
    Çalıştır:  node sunucu/sunucu.mjs   (PORT varsayılan 3000) */
 
 import http from 'node:http';
@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import musait from './musait.mjs';
 import randevu from './randevu.mjs';
+import { planIstegi, planGovdeSiniri } from './plan.mjs';
 
 const BURASI = path.dirname(fileURLToPath(import.meta.url));
 const KOK = path.resolve(process.env.SITE_KOK || path.join(BURASI, '..', 'site'));
@@ -81,13 +82,13 @@ function json(cevap, durum, veri) {
   yaz(cevap, durum, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }, JSON.stringify(veri));
 }
 
-function govdeOku(istek) {
+function govdeOku(istek, sinir = GOVDE_SINIRI) {
   return new Promise((coz, reddet) => {
     const parcalar = [];
     let boy = 0;
     const yukle = (p) => {
       boy += p.length;
-      if (boy > GOVDE_SINIRI) {
+      if (boy > sinir) {
         // Soketi koparmadan reddet: yanıt istemciye ulaşsın, kalan gövde boşa akar.
         istek.off('data', yukle);
         istek.resume();
@@ -120,6 +121,19 @@ async function webIsleyici(isleyici, istek, cevap) {
   yaz(cevap, webCevap.status, basliklar, Buffer.from(await webCevap.arrayBuffer()));
 }
 
+/** Plan uçları çerez ve yetki başlığına ihtiyaç duyar; düz bağlamla çalışır (Request'in başlık kısıtları yok). */
+async function planAdaptoru(istek, cevap, urlYolu) {
+  let govde;
+  if (istek.method === 'POST') {
+    try { govde = await govdeOku(istek, planGovdeSiniri(urlYolu)); }
+    catch (h) { json(cevap, h.durum || 400, { sebep: h.durum === 413 ? 'buyuk' : 'govde' }); return; }
+  }
+  const s = await planIstegi({
+    yontem: istek.method, yol: urlYolu, basliklar: istek.headers, govde, ip: istemciAdresi(istek)
+  });
+  yaz(cevap, s.durum, s.basliklar, s.govde);
+}
+
 /** URL yolunu site klasörü içinde güvenli bir dosya yoluna çevirir; dışarı çıkan her şey null. */
 function dosyaYolu(urlYolu) {
   let y;
@@ -134,6 +148,8 @@ function dosyaYolu(urlYolu) {
 
 function onbellekKurali(urlYolu, uzanti, dosya) {
   if (urlYolu.startsWith('/varlik/')) return { 'Cache-Control': 'public, max-age=31536000, immutable' };
+  // Plan kabuğu her açılışta tazelenir (dağıtım sonrası eski sürüm kalmaz) ve çerçeveye alınamaz.
+  if (urlYolu.startsWith('/plan/')) return { 'Cache-Control': 'no-cache', 'X-Frame-Options': 'DENY' };
   if (uzanti === '.vcf') {
     return {
       'Cache-Control': 'public, max-age=3600',
@@ -220,7 +236,14 @@ export function sunucuOlustur() {
         if (sinirAsildiMi(istemciAdresi(istek))) return json(cevap, 429, { tamam: false, sebep: 'cok-fazla' });
         return await webIsleyici(randevu, istek, cevap);
       }
+      if (urlYolu === '/api/plan' || urlYolu.startsWith('/api/plan/')) {
+        return await planAdaptoru(istek, cevap, urlYolu);
+      }
       if (urlYolu.startsWith('/api/')) return json(cevap, 404, { sebep: 'yok' });
+      if (urlYolu === '/plan') {
+        const sorgu = new URL(istek.url, 'http://yerel').search;
+        return yaz(cevap, 308, { Location: '/plan/' + sorgu, 'Cache-Control': 'no-store' }, '');
+      }
       if (istek.method !== 'GET' && istek.method !== 'HEAD') {
         return yaz(cevap, 405, { Allow: 'GET, HEAD', 'Content-Type': 'text/plain; charset=utf-8' }, 'yontem');
       }
