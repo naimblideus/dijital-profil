@@ -1,4 +1,4 @@
-/* Sahte Google: jeton, freeBusy, etkinlik yazma ve Gmail gönderme uçları.
+/* Sahte Google: jeton, freeBusy, etkinlik yazma/listeleme/güncelleme/silme ve Gmail gönderme uçları.
    Testler ve yerel deneme gerçek hesaba dokunmadan bununla çalışır. */
 
 import http from 'node:http';
@@ -11,7 +11,10 @@ export async function sahteGoogleBaslat(port = 0) {
     epostalar: [],     // çözülmüş ham ileti
     takvimHata: false,
     gmailHata: false,
-    meetYok: false     // Google Meet linkini hemen vermezse
+    meetYok: false,    // Google Meet linkini hemen vermezse
+    kayitlar: new Map(), // id → etkinlik kaynağı (liste/oku/güncelle/sil bunu görür)
+    islemler: [],      // { yontem: 'PATCH'|'DELETE', id, sendUpdates, govde }
+    sayac: 0           // etkinlik kimliği sayacı (sıfırlamalarda da tekrar etmez)
   };
 
   const sunucu = http.createServer((istek, cevap) => {
@@ -51,12 +54,50 @@ export async function sahteGoogleBaslat(port = 0) {
         const etkinlik = JSON.parse(govde);
         const surum = url.searchParams.get('conferenceDataVersion');
         durum.etkinlikler.push({ takvim: decodeURIComponent(e[1]), sendUpdates: url.searchParams.get('sendUpdates'), surum, govde: etkinlik });
-        durum.mesgul.push({ start: etkinlik.start.dateTime, end: etkinlik.end.dateTime });
-        const cevapGovde = { id: 'etk' + durum.etkinlikler.length, htmlLink: 'https://calendar.google.com/event?eid=sahte' };
+        const id = 'etk' + (++durum.sayac);
+        durum.mesgul.push({ start: etkinlik.start.dateTime, end: etkinlik.end.dateTime, etkinlikId: id });
+        const cevapGovde = { id, htmlLink: 'https://calendar.google.com/event?eid=sahte' };
         if (surum === '1' && etkinlik.conferenceData && etkinlik.conferenceData.createRequest && !durum.meetYok) {
           cevapGovde.hangoutLink = 'https://meet.google.com/abc-defg-hij';
         }
-        return gonder(200, cevapGovde);
+        const kaynak = { ...etkinlik, ...cevapGovde, status: 'confirmed', organizer: { self: true } };
+        delete kaynak.conferenceData;
+        durum.kayitlar.set(id, kaynak);
+        return gonder(200, kaynak);
+      }
+      if (e && istek.method === 'GET') {
+        if (durum.takvimHata) return gonder(500, { error: 'ic hata: gizli ayrinti' });
+        const bas = new Date(url.searchParams.get('timeMin')), bit = new Date(url.searchParams.get('timeMax'));
+        const items = [...durum.kayitlar.values()]
+          .filter((k) => !k.start.dateTime || (new Date(k.end.dateTime) > bas && new Date(k.start.dateTime) < bit))
+          .sort((a, b) => String(a.start.dateTime || a.start.date).localeCompare(String(b.start.dateTime || b.start.date)));
+        return gonder(200, { kind: 'calendar#events', items });
+      }
+
+      const tek = /^\/calendar\/v3\/calendars\/([^/]+)\/events\/([^/]+)$/.exec(url.pathname);
+      if (tek) {
+        const id = decodeURIComponent(tek[2]);
+        const k = durum.kayitlar.get(id);
+        if (!k) return gonder(404, { error: 'notFound' });
+        if (istek.method === 'GET') return gonder(200, k);
+        if (istek.method === 'PATCH') {
+          const yama = JSON.parse(govde);
+          durum.islemler.push({ yontem: 'PATCH', id, sendUpdates: url.searchParams.get('sendUpdates'), govde: yama });
+          // Gerçek API gibi: alt nesneler birleşir, verilen alan değişir.
+          for (const [a, d] of Object.entries(yama)) {
+            k[a] = d && typeof d === 'object' && !Array.isArray(d) && k[a] && typeof k[a] === 'object' ? { ...k[a], ...d } : d;
+          }
+          const m = durum.mesgul.find((x) => x.etkinlikId === id);
+          if (m) { m.start = k.start.dateTime; m.end = k.end.dateTime; }
+          return gonder(200, k);
+        }
+        if (istek.method === 'DELETE') {
+          durum.islemler.push({ yontem: 'DELETE', id, sendUpdates: url.searchParams.get('sendUpdates') });
+          durum.kayitlar.delete(id);
+          durum.mesgul = durum.mesgul.filter((x) => x.etkinlikId !== id);
+          cevap.writeHead(204);
+          return cevap.end();
+        }
       }
 
       if (url.pathname === '/gmail/v1/users/me/messages/send') {

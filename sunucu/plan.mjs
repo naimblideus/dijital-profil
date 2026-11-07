@@ -266,8 +266,14 @@ function yanlisKaydet(ip) {
   toplamDeneme.push(simdi);
 }
 
+/* Toplantı ekranı (/toplanti) AYNI girişi kullanır: ayrı şifre yok, aynı çerez, aynı makine anahtarı. */
+export function planKurulduMu() { return Boolean(sifre()); }
+export function planYetkili(basliklar) { return yetkili({ basliklar }); }
+/** Makine anahtarı (Bearer PLAN_ANAHTAR) sabit süreli karşılaştırma için dışarı da açık. */
+export function anahtarEsit(gelen, beklenen) { return Boolean(gelen && beklenen) && esit(gelen, beklenen); }
+
 /** Başka siteden gelen istek mi? Origin varsa ana makineyle aynı olmalı. */
-function kokenUyarMi(koken, b) {
+export function kokenUyarMi(koken, b) {
   let h;
   try { h = new URL(koken).host; } catch { return false; }
   const ileri = String(b['x-forwarded-host'] || '').split(',')[0].trim();

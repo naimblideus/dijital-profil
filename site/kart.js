@@ -323,6 +323,8 @@
     slotlariYukle();
   });
   rKapat.addEventListener('click', sheetKapat);
+  // Toplantı ekranının "Randevu linki gönder" bağlantısı (…/#randevu) randevu bölümünü doğrudan açar.
+  if (location.hash === '#randevu') rAc.click();
 
   function basariGoster(saatMetni, whatsappKipi, sonuc) {
     rForm.hidden = true;
