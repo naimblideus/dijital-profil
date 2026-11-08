@@ -1,5 +1,9 @@
 /* DeepCore — naim.nextusservis.com/plan
-   TEK EKRAN: saati olan görev = zaman bloğu. Tepede "Şimdi" kartı ve tek Odaklan düğmesi.
+   Kâğıt timebox defteri gibi TEK EKRAN:
+     Şimdi kartı  → şu an ne yapmalıyım (görev ya da toplantı), tek dokunuşla Odaklan
+     Bugünün 3'ü  → günün en önemli üç işi
+     Saatler      → zaman ızgarası: saatli görevler + takvimdeki toplantılar (kart randevuları dahil)
+     Kafamdakiler → saatsiz işler + CRM'den gelenler (görevlerim, doğrulamam, bugünkü takipler)
    Veri ASLA innerHTML'e girmez; her dokunuş anında görünür, sunucu reddederse geri alınır. */
 'use strict';
 
@@ -11,17 +15,18 @@
   const AY = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
 
   const ALANLAR = [
-    { ad: 'Servis', renk: '#4BA3E3', es: ['nexus servis', 'nextus servis', 'servis', 'srv'] },
-    { ad: 'Saha', renk: '#4DB37E', es: ['büyüme', 'buyume', 'görüşme', 'gorusme', 'saha'] },
-    { ad: 'Kod', renk: '#97A3B8', es: ['deploy', 'kod', 'maker'] },
-    { ad: 'Kredi', renk: '#E26A7C', es: ['otoprime', 'op', 'kredi', 'nextus kredi'] },
-    { ad: 'Ekip', renk: '#E8964A', es: ['ekip', 'eğitim', 'egitim', 'ik', 'hat'] },
-    { ad: 'Kişisel', renk: '#D27BB0', es: ['kişisel', 'kisisel', 'spor', 'disiplin'] },
-    { ad: 'AI', renk: '#D4AE3C', es: ['ai', 'yz'] },
-    { ad: 'Dekor', renk: '#C88A4A', es: ['dekor', 'nextus dekor'] },
-    { ad: 'Reçete', renk: '#9B82E0', es: ['reçete', 'recete', 'nextus reçete', 'nextus recete'] },
-    { ad: 'Frigora', renk: '#4BC0CF', es: ['frigora', 'soğutma', 'sogutma'] },
-    { ad: 'Nextus', renk: '#8890E6', es: ['nexus', 'nextus', 'nx'] }
+    { ad: 'Servis', renk: '#0A84FF', es: ['nexus servis', 'nextus servis', 'servis', 'srv', 'nexus-servis'] },
+    { ad: 'Saha', renk: '#34C759', es: ['büyüme', 'buyume', 'görüşme', 'gorusme', 'saha'] },
+    { ad: 'Kod', renk: '#8E8E93', es: ['deploy', 'kod', 'maker'] },
+    { ad: 'Kredi', renk: '#FF375F', es: ['otoprime', 'op', 'kredi', 'nextus kredi'] },
+    { ad: 'Ekip', renk: '#FF9F0A', es: ['ekip', 'eğitim', 'egitim', 'ik', 'hat'] },
+    { ad: 'Kişisel', renk: '#BF5AF2', es: ['kişisel', 'kisisel', 'spor', 'disiplin'] },
+    { ad: 'AI', renk: '#FFD60A', es: ['ai', 'yz'] },
+    { ad: 'Dekor', renk: '#AC8E68', es: ['dekor', 'nextus dekor', 'nextus-dekor'] },
+    { ad: 'Reçete', renk: '#5E5CE6', es: ['reçete', 'recete', 'nextus reçete', 'nextus recete', 'recetemaliyet'] },
+    { ad: 'Frigora', renk: '#64D2FF', es: ['frigora', 'soğutma', 'sogutma'] },
+    { ad: 'Makine', renk: '#FF6B00', es: ['makine', 'makine-takip', 'makine takip'] },
+    { ad: 'Nextus', renk: '#8E8CF0', es: ['nexus', 'nextus', 'nx', 'genel'] }
   ];
   function alanBul(etiket) {
     if (!etiket) return null;
@@ -38,18 +43,21 @@
   function gunFarki(a, b) { return Math.round((tarih(b) - tarih(a)) / 864e5); }
   function haftaBasi(iso) { return gunEkle(iso, -((tarih(iso).getDay() + 6) % 7)); }
   function gunBasligi(iso) { const d = tarih(iso); return `${GUN_UZUN[d.getDay()]}, ${d.getDate()} ${AY[d.getMonth()]}`; }
-  function goreceli(iso) {
+  function kisaTarih(iso) { const d = tarih(iso); return `${d.getDate()} ${AY[d.getMonth()]} ${GUN_UZUN[d.getDay()]}`; }
+  function buyukBaslik(iso) {
     const f = gunFarki(bugun(), iso);
-    return f === 0 ? 'Bugün' : f === 1 ? 'Yarın' : f === -1 ? 'Dün' : '';
+    return f === 0 ? 'Bugün' : f === 1 ? 'Yarın' : f === -1 ? 'Dün' : GUN_UZUN[tarih(iso).getDay()];
   }
   const GECERLI_GUN = /^\d{4}-\d{2}-\d{2}$/;
   const SAAT = /^([01]\d|2[0-3]):[0-5]\d$|^24:00$/;
   function dkSaat(s) { const [h, m] = s.split(':').map(Number); return h * 60 + m; }
+  function saatDk(dk) { return `${String(Math.floor(dk / 60)).padStart(2, '0')}:${String(dk % 60).padStart(2, '0')}`; }
   function suAnDk() { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); }
   function sureYaz(dk) {
     const h = Math.floor(dk / 60), m = Math.round(dk % 60);
     return h ? (m ? `${h} sa ${m} dk` : `${h} sa`) : `${m} dk`;
   }
+  function yerelSaat(isoZaman) { const d = new Date(isoZaman); return { gun: isoGun(d), dk: d.getHours() * 60 + d.getMinutes() }; }
 
   /** Sunucudaki biçimin aynısı: "[Alan] 14:00-15:00 Başlık | dk | not". */
   function satirAyir(s) {
@@ -72,6 +80,11 @@
     return { alan, baslik, bas, bit, dk: dkVar ? Number(p[1].trim()) : null, not: (dkVar ? p.slice(2) : p.slice(1)).join('|').trim() };
   }
 
+  // CRM'den alınan iş notunun sonunda görünmez bir işaret taşır: ⟨crm:g61⟩. Böylece aynı iş iki kez gelmez.
+  const CRM_ISARET = /⟨crm:([A-Za-z0-9_-]{1,64})⟩/;
+  function crmIsareti(g) { const m = CRM_ISARET.exec(g.not || ''); return m ? m[1] : null; }
+  function notGoster(not) { return String(not || '').replace(/\s*⟨crm:[^⟩]*⟩\s*/g, ' ').trim(); }
+
   function el(etiket, ozellik, ...cocuklar) {
     const e = document.createElement(etiket);
     if (ozellik) {
@@ -79,6 +92,7 @@
         if (v === null || v === undefined || v === false) continue;
         if (k === 'class') e.className = v;
         else if (k === 'text') e.textContent = v;
+        else if (k === 'style') e.style.cssText = v;
         else if (k.startsWith('on') && typeof v === 'function') e.addEventListener(k.slice(2), v);
         else e.setAttribute(k, v === true ? '' : String(v));
       }
@@ -119,7 +133,10 @@
   const D = {
     gorevler: [], haftalar: [], seanslar: [], kapanislar: [], ayarlar: { haftalikDerinHedef: 20 },
     kalici: true, uyari: null, guncellendi: null,
-    secili: bugun(), acikNotlar: new Set(), bekleyenSil: null
+    secili: bugun(), acikNotlar: new Set(), bekleyenSil: null,
+    crm: { durum: 'yukleniyor', isler: [] },     // CRM'den bugünkü işlerim
+    toplantilar: [],                             // takvimdeki kişili toplantılar (kart randevuları dahil)
+    crmHepsi: false
   };
   {
     const istenen = new URLSearchParams(location.search).get('gun');
@@ -141,6 +158,7 @@
       return (a.sira ?? 0) - (b.sira ?? 0) || String(a.olusturuldu || '').localeCompare(String(b.olusturuldu || ''));
     });
   }
+  function ustler(gun) { return gunGorevleri(gun).filter((g) => g.ust).slice(0, 3); }
 
   function kalanlar() {
     const b = bugun();
@@ -148,11 +166,22 @@
     return D.gorevler.filter((g) => !g.bitti && !g.gecici && g.gun < b && g.gun >= sinir);
   }
 
-  function gunDurumu(gun) {
-    const l = D.gorevler.filter((g) => g.gun === gun);
-    if (!l.length) return 'bos';
-    const biten = l.filter((g) => g.bitti).length;
-    return biten === l.length ? 'tamam' : biten ? 'yarim' : 'var';
+  function gunToplantilari(gun) {
+    return D.toplantilar.map((t) => {
+      const b = yerelSaat(t.bas), e = yerelSaat(t.bit);
+      return { t, gun: b.gun, b: b.dk, e: e.gun === b.gun ? e.dk : 1440 };
+    }).filter((x) => x.gun === gun && x.e > x.b);
+  }
+
+  /** CRM'den gelen, henüz DeepCore'a alınmamış işler. Alınan iş bitince ertesi gün CRM hâlâ açık diyorsa geri gelir. */
+  function crmBekleyen() {
+    const b = bugun();
+    return D.crm.isler.filter((i) => !D.gorevler.some((g) => crmIsareti(g) === i.id && (!g.bitti || g.gun === b)));
+  }
+  function crmIsi(id) { return D.crm.isler.find((i) => i.id === id) || null; }
+  function crmKoku() {
+    const a = D.crm.isler.find((i) => i.adres);
+    try { return a ? new URL(a.adres).origin : null; } catch { return null; }
   }
 
   function haftaNotu(gun) { return D.haftalar.filter((h) => h.bas <= gun && gun <= h.son).pop() || null; }
@@ -162,14 +191,18 @@
     return D.seanslar.filter((s) => s.derin !== false && k.has(s.gun)).reduce((t, s) => t + s.dk, 0);
   }
 
-  /** Şimdi ne yapmalıyım? Saati şu ana düşen → sıradaki saatli → ilk saatsiz. */
+  /** Şimdi ne yapmalıyım? Toplantı (15 dk içinde ya da sürüyor) → saati şu ana düşen blok → sıradaki saatli →
+      Bugünün 3'ünden ilk açık → ilk saatsiz. */
   function simdikiIs() {
-    const l = gunGorevleri(bugun()).filter((g) => !g.bitti && !g.gecici);
+    const b = bugun();
     const an = suAnDk();
+    const t = gunToplantilari(b).find((x) => x.b - 15 <= an && an < x.e);
+    if (t) return { toplanti: t, tur: t.b <= an ? 'simdi' : 'sonraki' };
+    const l = gunGorevleri(b).filter((g) => !g.bitti && !g.gecici);
     const icinde = l.find((g) => g.bas && dkSaat(g.bas) <= an && an < dkSaat(g.bit));
     if (icinde) return { g: icinde, tur: 'simdi' };
     const sonraki = l.find((g) => g.bas && dkSaat(g.bas) > an);
-    const saatsiz = l.find((g) => !g.bas);
+    const saatsiz = l.find((g) => !g.bas && g.ust) || l.find((g) => !g.bas);
     if (sonraki && (!saatsiz || dkSaat(sonraki.bas) - an <= 30)) return { g: sonraki, tur: 'sonraki' };
     if (saatsiz) return { g: saatsiz, tur: 'saatsiz' };
     if (sonraki) return { g: sonraki, tur: 'sonraki' };
@@ -221,6 +254,22 @@
     else bildir('Kaydedilemedi — tekrar dene');
   }
 
+  /** Dış kaynaklar: CRM işleri + takvim toplantıları. Plan girişiyle aynı oturum; biri düşerse ekran yine çalışır. */
+  let disZamani = 0;
+  async function disYukle() {
+    disZamani = Date.now();
+    const al = async (yol) => {
+      try {
+        const c = await fetch(yol, { credentials: 'same-origin', cache: 'no-store' });
+        return c.ok ? await c.json() : null;
+      } catch { return null; }
+    };
+    const [isler, toplanti] = await Promise.all([al('/api/toplanti/isler'), al('/api/toplanti')]);
+    D.crm = isler && Array.isArray(isler.isler) ? { durum: isler.durum || 'tamam', isler: isler.isler } : { durum: 'hata', isler: [] };
+    D.toplantilar = toplanti && Array.isArray(toplanti.toplantilar) ? toplanti.toplantilar : D.toplantilar;
+    if (senkronZamanlayici && !acikSayfa && !odakEkrani) ciz();
+  }
+
   /* ======================= çizim ======================= */
 
   let ekleCubugu = null, ekleGirdi = null, ekleDugme = null;
@@ -233,70 +282,35 @@
     const biten = liste.filter((g) => g.bitti).length;
     const p = [];
 
-    // üst
+    // üst: ‹ tarih ›  ·  Bugün  ·  menü
     p.push(el('header', { class: 'ust' },
-      el('div', { class: 'ust-sol' },
-        el('p', { class: 'goz', text: goreceli(secili) }),
-        el('h1', { class: 'gun-baslik', text: gunBasligi(secili) })),
-      el('div', { class: 'ust-dugmeler' },
+      el('div', { class: 'gezgin' },
+        el('button', { type: 'button', 'aria-label': 'Önceki gün', onclick: () => gunSec(gunEkle(secili, -1)) }, ikon('sol')),
+        el('span', { class: 'tarih-yazi', text: kisaTarih(secili) }),
+        el('button', { type: 'button', 'aria-label': 'Sonraki gün', onclick: () => gunSec(gunEkle(secili, 1)) }, ikon('sag'))),
+      el('div', { class: 'ust-sag' },
         !bugunMu ? el('button', { class: 'bugune', type: 'button', onclick: () => gunSec(bugun()) }, 'Bugün') : null,
         el('button', { class: 'ikon-dugme', type: 'button', 'aria-label': 'Menü', onclick: menuAc }, ikon('menu')))));
+    p.push(el('h1', { class: 'buyuk-baslik', text: buyukBaslik(secili) }));
 
-    // tek satır skor: kaç iş bitti + derin saat (Newport skorbordu)
     const hafta = Array.from({ length: 7 }, (_, i) => gunEkle(haftaBasi(secili), i));
-    const haftaDk = derinDk(hafta);
-    const hedefDk = (D.ayarlar.haftalikDerinHedef || 0) * 60;
-    const dolgu = el('i');
-    dolgu.style.transform = `scaleX(${hedefDk ? Math.min(1, haftaDk / hedefDk) : 0})`;
-    p.push(el('button', { class: 'skor', type: 'button', onclick: hedefSayfasi, 'aria-label': 'Haftalık derin iş hedefi' },
-      el('span', { class: 'skor-satir' },
-        el('span', {}, el('b', { text: String(biten) }), ` / ${liste.length} iş`),
-        el('span', {}, 'Derin ', el('b', { text: sureYaz(derinDk([secili])) })),
-        el('span', { class: 'hafta-saat' }, 'Hafta ', el('b', { text: (haftaDk / 60).toFixed(1).replace('.', ',') }), ` / ${D.ayarlar.haftalikDerinHedef} sa`)),
-      el('span', { class: 'cubuk' }, dolgu)));
-
-    // hafta şeridi
-    const bas = haftaBasi(secili);
-    const serit = el('nav', { class: 'serit', 'aria-label': 'Hafta' },
-      el('button', { class: 'ok', type: 'button', 'aria-label': 'Önceki hafta', onclick: () => gunSec(gunEkle(secili, -7)) }, ikon('sol')));
-    for (let i = 0; i < 7; i++) {
-      const gun = gunEkle(bas, i);
-      const d = tarih(gun);
-      serit.append(el('button', {
-        class: 'gun' + (gun === bugun() ? ' bugun' : ''), type: 'button',
-        'data-gun': gun, 'data-durum': gunDurumu(gun),
-        'aria-pressed': String(gun === secili), 'aria-current': gun === bugun() ? 'date' : null,
-        'aria-label': gunBasligi(gun), onclick: () => gunSec(gun)
-      }, el('span', { class: 'k', text: GUN_KISA[d.getDay()] }), el('span', { class: 'n', text: String(d.getDate()) }), el('span', { class: 'nokta' })));
-    }
-    serit.append(el('button', { class: 'ok', type: 'button', 'aria-label': 'Sonraki hafta', onclick: () => gunSec(gunEkle(secili, 7)) }, ikon('sag')));
-    p.push(serit);
+    const derinGun = derinDk([secili]);
+    p.push(el('p', { class: 'ozet' },
+      el('span', {}, el('b', { text: `${biten}/${liste.length}` }), ' bitti'),
+      derinGun ? el('span', {}, 'Derin ', el('b', { text: sureYaz(derinGun) })) : null,
+      el('span', {}, 'Hafta ', el('b', { text: (derinDk(hafta) / 60).toFixed(1).replace('.', ',') }), ` / ${D.ayarlar.haftalikDerinHedef} sa derin`)));
 
     // uyarılar
     if (!D.kalici) {
       p.push(el('div', { class: 'serit-uyari', role: 'status' },
-        el('p', {}, 'Veriler kalıcı değil', el('small', { text: 'Sunucu yeniden kurulunca silinir. Coolify → Storages → /app/veri birimini ekle.' }))));
+        el('p', {}, 'Veriler kalıcı değil', el('small', { text: 'Coolify → Storages → /app/veri birimini ekle.' }))));
     }
     if (D.uyari) p.push(el('div', { class: 'serit-uyari', role: 'status' }, el('p', {}, D.uyari)));
 
-    // ŞİMDİ kartı — tek düğme
+    // ŞİMDİ
     if (bugunMu && !acikOdak()) {
-      const s = simdikiIs();
-      if (s) {
-        const g = s.g;
-        const etiket = { simdi: 'Şimdi', sonraki: 'Sıradaki', saatsiz: 'Sıradaki iş', kacti: 'Saati geçti' }[s.tur];
-        const zaman = g.bas ? `${g.bas}–${g.bit}` : (g.dk ? sureYaz(g.dk) : '');
-        p.push(el('section', { class: 'simdi' + (s.tur === 'simdi' ? ' canli' : '') },
-          el('p', { class: 'simdi-etiket' }, etiket, zaman ? el('span', { text: zaman }) : null),
-          el('p', { class: 'simdi-baslik', text: g.baslik }),
-          el('div', { class: 'simdi-dugmeler' },
-            el('button', { class: 'odaklan', type: 'button', onclick: () => odakBaslat(g) }, ikon('oynat'), 'Odaklan'),
-            el('button', { class: 'ikincil-dugme', type: 'button', onclick: () => isaretle(g) }, 'Bitti'))));
-      } else if (liste.length) {
-        p.push(el('section', { class: 'simdi bitti-kart' },
-          el('p', { class: 'simdi-baslik', text: 'Bugünün işi bitti.' }),
-          !D.kapanislar.includes(secili) ? el('p', { class: 'simdi-alt', text: 'Kapanışı yap, yarını çiz.' }) : null));
-      }
+      const kart = simdiKarti(liste);
+      if (kart) p.push(kart);
     }
 
     // geçmişten kalan
@@ -304,37 +318,28 @@
       const k = kalanlar();
       if (k.length) {
         const enEski = k.reduce((m, g) => (g.gun < m ? g.gun : m), k[0].gun);
-        p.push(el('div', { class: 'serit-uyari kalan' },
-          el('p', {}, `Geçmişten kalan ${k.length} görev`, el('small', { text: 'Yapılanları işaretle, kalanı bugüne al.' })),
+        p.push(el('div', { class: 'serit-uyari' },
+          el('p', {}, `Geçmişten ${k.length} iş kaldı`, el('small', { text: 'Yapılanı işaretle, kalanı bugüne al.' })),
           el('div', { class: 'dugmeler' },
-            el('button', { type: 'button', class: 'ikincil', onclick: () => gunSec(enEski) }, 'Gözden geçir'),
-            el('button', { type: 'button', onclick: kalanlariAl }, 'Hepsini bugüne al'))));
+            el('button', { type: 'button', class: 'ikincil', onclick: () => gunSec(enEski) }, 'Bak'),
+            el('button', { type: 'button', onclick: kalanlariAl }, 'Bugüne al'))));
       }
     }
 
-    // gün: tek liste (saatliler saat sütunuyla)
-    if (liste.length) {
-      const sm = bugunMu ? simdikiIs() : null;
-      p.push(el('section', { class: 'liste', 'aria-label': 'Günün işleri' }, liste.map((g) => satir(g, sm && sm.tur === 'simdi' && sm.g === g))));
-    } else {
-      p.push(el('section', { class: 'liste' },
-        el('div', { class: 'bos' },
-          el('strong', { text: bugunMu ? 'Bugün boş' : 'Bu gün boş' }),
-          'Aşağıya yaz. Saat de yazarsan bloğa girer:', el('br'), el('code', { text: '14:00-15:30 Teklif yaz' }))));
-    }
+    p.push(ustBolumu(secili));
+    p.push(saatBolumu(secili, liste));
+    p.push(kafamBolumu(secili, liste));
 
     // kapanış ritüeli
     if (gunFarki(bugun(), secili) <= 0 && liste.length) {
       p.push(D.kapanislar.includes(secili)
-        ? el('p', { class: 'kapandi' }, el('span', { class: 'kapandi-tik' }, ikon('tik')), 'Kapanış tamam')
+        ? el('p', { class: 'kapandi' }, ikon('tik'), 'Gün kapandı')
         : el('button', { class: 'gunu-kapat', type: 'button', onclick: kapanisSayfasi }, 'Günü kapat'));
     }
 
-    // haftanın notu (en altta, kapalı)
     const h = haftaNotu(secili);
     if (h && h.not) {
-      const kutu = el('details', { class: 'hafta-notu' }, el('summary', {}, el('span', { text: h.baslik || 'Haftanın notu' })), el('p', { class: 'govde', text: h.not }));
-      p.push(kutu);
+      p.push(el('details', { class: 'bolum-not' }, el('summary', {}, h.baslik || 'Haftanın notu'), el('p', { class: 'not', text: h.not })));
     }
 
     const ipucu = kurulumIpucu();
@@ -344,47 +349,199 @@
     ekleCubuguKur();
   }
 
-  function satir(g, canli) {
+  function simdiKarti(liste) {
+    const s = simdikiIs();
+    if (s && s.toplanti) {
+      const { t, b, e } = s.toplanti;
+      return el('section', { class: 'simdi toplanti-kart' + (s.tur === 'simdi' ? ' canli' : '') },
+        el('p', { class: 'simdi-etiket' }, s.tur === 'simdi' ? 'Toplantı sürüyor' : 'Birazdan toplantı', el('span', { text: `${saatDk(b)}–${saatDk(e)}` })),
+        el('p', { class: 'simdi-baslik', text: toplantiAdi(t) }),
+        el('div', { class: 'simdi-dugmeler' },
+          t.meet ? el('a', { class: 'odaklan', href: t.meet, target: '_blank', rel: 'noopener noreferrer' }, 'Meet’e katıl') : null,
+          el('button', { class: t.meet ? 'ikincil-dugme' : 'odaklan', type: 'button', onclick: () => toplantiSayfasi(t, b, e) }, 'Ayrıntı')));
+    }
+    if (s) {
+      const g = s.g;
+      const etiket = { simdi: 'Şimdi', sonraki: 'Sıradaki', saatsiz: 'Sıradaki iş', kacti: 'Saati geçti' }[s.tur];
+      const zaman = g.bas ? `${g.bas}–${g.bit}` : (g.dk ? sureYaz(g.dk) : '');
+      return el('section', { class: 'simdi' + (s.tur === 'simdi' ? ' canli' : '') },
+        el('p', { class: 'simdi-etiket' }, etiket, zaman ? el('span', { text: zaman }) : null),
+        el('p', { class: 'simdi-baslik', text: g.baslik }),
+        el('div', { class: 'simdi-dugmeler' },
+          el('button', { class: 'odaklan', type: 'button', onclick: () => odakBaslat(g) }, ikon('oynat'), 'Odaklan'),
+          el('button', { class: 'ikincil-dugme', type: 'button', onclick: () => isaretle(g) }, 'Bitti')));
+    }
+    if (liste.length) {
+      return el('section', { class: 'simdi sakin' },
+        el('p', { class: 'simdi-baslik', text: 'Bugünün işi bitti.' }),
+        !D.kapanislar.includes(D.secili) ? el('p', { class: 'simdi-alt', text: 'Günü kapat, yarını çiz.' }) : null);
+    }
+    return null;
+  }
+
+  function bolum(baslik, sag, ...icerik) {
+    return el('section', { class: 'bolum' }, el('div', { class: 'bolum-bas' }, el('h2', { text: baslik }), sag || null), ...icerik);
+  }
+
+  /* --- Bugünün 3'ü --- */
+  function ustBolumu(gun) {
+    const u = ustler(gun);
+    const grup = el('div', { class: 'grup' });
+    u.forEach((g, i) => grup.append(satir(g, { numara: i + 1 })));
+    for (let i = u.length; i < 3; i++) {
+      grup.append(el('button', { class: 'satir bos-satir', type: 'button', onclick: () => ustSecSayfasi(gun) },
+        el('span', { class: 'numara', text: String(i + 1) }),
+        el('span', { class: 'metin' }, el('span', { class: 'baslik', text: i === u.length ? 'En önemli işi seç' : '' }))));
+    }
+    return bolum('Bugünün 3’ü', u.length === 3 && u.every((g) => g.bitti) ? el('small', { text: 'Üçü de bitti' }) : null, grup);
+  }
+
+  /* --- Saatler: zaman ızgarası --- */
+  const DK_PX = 46 / 60;
+  function saatBolumu(gun, liste) {
+    const bloklar = [
+      ...liste.filter((g) => g.bas).map((g) => ({ tur: 'gorev', g, b: dkSaat(g.bas), e: dkSaat(g.bit) })),
+      ...gunToplantilari(gun).map((x) => ({ tur: 'toplanti', t: x.t, b: x.b, e: x.e }))
+    ].sort((x, y) => x.b - y.b || y.e - x.e);
+    let h0 = 7, h1 = 23;
+    for (const x of bloklar) { h0 = Math.min(h0, Math.floor(x.b / 60)); h1 = Math.max(h1, Math.ceil(x.e / 60)); }
+    h1 = Math.min(24, h1);
+
+    // çakışanları yan yana diz
+    let grup = [], grupSon = -1, seritSon = [];
+    const kapat = () => { const n = Math.max(...grup.map((x) => x.serit)) + 1; grup.forEach((x) => { x.n = n; }); grup = []; seritSon = []; };
+    for (const x of bloklar) {
+      if (grup.length && x.b >= grupSon) kapat();
+      let s = seritSon.findIndex((son) => son <= x.b);
+      if (s < 0) s = seritSon.length;
+      seritSon[s] = x.e;
+      x.serit = s;
+      grup.push(x);
+      grupSon = Math.max(grupSon, x.e);
+    }
+    if (grup.length) kapat();
+
+    const izgara = el('div', { class: 'saatler' });
+    for (let h = h0; h < h1; h++) {
+      izgara.append(el('button', { class: 'saat-satir', type: 'button', 'aria-label': `${h}:00 saatine iş koy`, onclick: () => saateKoySayfasi(gun, h * 60) },
+        el('span', { class: 's', text: `${String(h).padStart(2, '0')}:00` }), el('span', { class: 'c' })));
+    }
+    const katman = el('div', { class: 'bloklar' });
+    const an = suAnDk();
+    const sm = gun === bugun() ? simdikiIs() : null;
+    for (const x of bloklar) {
+      const ust = (x.b - h0 * 60) * DK_PX;
+      const yuk = Math.max(20, (x.e - x.b) * DK_PX - 2);
+      const kisa = yuk < 38;
+      const zaman = `${saatDk(x.b)}–${saatDk(x.e)}`;
+      const stil = `top:${ust}px;height:${yuk}px;left:calc(${(x.serit / x.n) * 100}% + 2px);width:calc(${100 / x.n}% - 4px)`;
+      if (x.tur === 'toplanti') {
+        katman.append(el('button', { class: 'blok toplanti' + (kisa ? ' kisa' : ''), type: 'button', style: stil, onclick: () => toplantiSayfasi(x.t, x.b, x.e) },
+          el('b', { text: toplantiAdi(x.t) }), el('span', { text: zaman })));
+      } else {
+        const canli = sm && sm.g === x.g && sm.tur === 'simdi';
+        katman.append(el('button', {
+          class: 'blok' + (x.g.bitti ? ' bitti' : '') + (kisa ? ' kisa' : '') + (canli ? ' canli' : ''), type: 'button', style: stil,
+          'data-id': x.g.id, onclick: () => gorevSayfasi(x.g)
+        }, el('b', { text: x.g.baslik }), el('span', { text: zaman })));
+      }
+    }
+    if (gun === bugun() && an >= h0 * 60 && an < h1 * 60) {
+      katman.append(el('i', { class: 'simdi-cizgi', style: `top:${(an - h0 * 60) * DK_PX}px`, 'aria-hidden': 'true' }));
+    }
+    izgara.append(katman);
+    return bolum('Saatler', bloklar.length ? null : el('small', { text: 'Boş bir saate dokun' }), izgara);
+  }
+
+  function toplantiAdi(t) {
+    const k = t.kisi || {};
+    const ad = [k.ad, k.firma ? `(${k.firma})` : null].filter(Boolean).join(' ');
+    return ad ? `Toplantı · ${ad}` : (t.baslik || 'Toplantı');
+  }
+
+  /* --- Kafamdakiler: saatsiz işler + CRM --- */
+  function kafamBolumu(gun, liste) {
+    const saatsiz = liste.filter((g) => !g.bas && !g.ust);
+    const acik = saatsiz.filter((g) => !g.bitti);
+    const bitmis = saatsiz.filter((g) => g.bitti);
+    const parca = [];
+    if (saatsiz.length) {
+      parca.push(el('div', { class: 'grup' }, [...acik, ...bitmis].map((g) => satir(g))));
+    }
+
+    // CRM yalnız bugün görünür: "en güncel işlerim"
+    if (gun === bugun()) {
+      const crm = crmBekleyen();
+      if (crm.length) {
+        const sinir = D.crmHepsi ? crm.length : 5;
+        const grup = el('div', { class: 'grup', style: saatsiz.length ? 'margin-top:12px' : null }, crm.slice(0, sinir).map(crmSatiri));
+        if (crm.length > sinir) {
+          grup.append(el('button', { class: 'daha-fazla', type: 'button', onclick: () => { D.crmHepsi = true; ciz(); } }, `${crm.length - sinir} iş daha`));
+        }
+        parca.push(el('p', { class: 'bolum-not', style: 'margin:14px 4px 8px', text: 'CRM’den — dokun, bugüne al' }), grup);
+      } else if (D.crm.durum === 'bekliyor') {
+        parca.push(el('p', { class: 'bolum-not', text: 'CRM bağlantısı yayın bekliyor.' }));
+      }
+    }
+    if (!parca.length) {
+      parca.push(el('div', { class: 'grup' }, el('div', { class: 'satir bos-satir' },
+        el('span', { class: 'metin' }, el('span', { class: 'baslik', text: 'Aklındakini aşağıya yaz.' })))));
+    }
+    return bolum('Kafamdakiler', acik.length ? el('small', { text: `${acik.length} açık` }) : null, ...parca);
+  }
+
+  function crmSatiri(i) {
+    const TUR = { takip: 'Takip', dogrula: 'Doğrula', is: 'Görev', oneri: 'Öneri' };
+    const alan = alanBul(i.proje);
+    const alt = el('span', { class: 'alt' },
+      el('span', { class: 'rozet ' + i.tur, text: TUR[i.tur] || 'CRM' }),
+      alan ? el('span', {}, el('i', { class: 'renk', style: alan.renk ? `--renk:${alan.renk}` : null }), ' ', alan.ad) : null,
+      i.gecikti ? el('span', { class: 'gecikti', text: 'gecikti' }) : null,
+      i.dk ? el('span', { text: `${i.dk} dk` }) : null);
+    return el('div', { class: 'satir' },
+      el('button', { class: 'metin', type: 'button', onclick: () => crmSayfasi(i) }, el('span', { class: 'baslik', text: i.baslik }), alt),
+      el('button', { class: 'sag-dugme ekle-dugme', type: 'button', 'aria-label': 'Bugüne al: ' + i.baslik, onclick: () => crmAl(i, {}) }, ikon('arti')));
+  }
+
+  function satir(g, { numara } = {}) {
     const alan = alanBul(g.alan);
     const acik = D.acikNotlar.has(g.id);
-    const bilgi = el('span', { class: 'bilgi' });
-    if (alan) {
-      const a = el('span', { class: 'alan', text: alan.ad });
-      if (alan.renk) a.style.setProperty('--renk', alan.renk);
-      bilgi.append(a);
-    }
-    if (g.dk && !g.bas) bilgi.append(el('span', { class: 'dk', text: `${g.dk} dk` }));
-    if (g.not && !acik) bilgi.append(el('span', { class: 'not-var', text: 'not' }));
+    const not = notGoster(g.not);
+    const crmId = crmIsareti(g);
+    const alt = el('span', { class: 'alt' });
+    if (alan) alt.append(el('span', {}, el('i', { class: 'renk', style: alan.renk ? `--renk:${alan.renk}` : null }), ' ', alan.ad));
+    if (g.bas) alt.append(el('span', { text: `${g.bas}–${g.bit}` }));
+    else if (g.dk) alt.append(el('span', { text: `${g.dk} dk` }));
+    if (crmId) alt.append(el('span', { class: 'rozet oneri', text: 'CRM' }));
+    if (not && !acik) alt.append(el('span', { text: 'not' }));
 
     const metin = el('button', {
-      class: 'metin', type: 'button', 'aria-expanded': g.not ? String(acik) : null, disabled: g.gecici || null,
+      class: 'metin', type: 'button', disabled: g.gecici || null,
       onclick: () => {
-        if (!g.not) return gorevSayfasi(g);
+        if (!not) return gorevSayfasi(g);
         if (D.acikNotlar.has(g.id)) D.acikNotlar.delete(g.id); else D.acikNotlar.add(g.id);
         ciz();
       }
-    }, el('span', { class: 'baslik', text: g.baslik }), bilgi.childNodes.length ? bilgi : null,
-    acik && g.not ? el('span', { class: 'not', text: g.not }) : null);
+    }, el('span', { class: 'baslik', text: g.baslik }), alt.childNodes.length ? alt : null,
+    acik && not ? el('span', { class: 'not', text: not }) : null);
 
-    return el('div', {
-      class: 'gorev' + (g.bitti ? ' bitti' : '') + (g.gecici ? ' gecici' : '') + (g.bas ? ' saatli' : '') + (canli ? ' canli' : ''),
-      'data-id': g.id
-    },
-    el('button', {
+    const tik = el('button', {
       class: 'tik', type: 'button', 'aria-pressed': String(Boolean(g.bitti)),
       'aria-label': (g.bitti ? 'Geri al: ' : 'Bitti: ') + g.baslik, disabled: g.gecici || null, onclick: () => isaretle(g)
-    }, el('i', {}, ikon('tik'))),
-    g.bas ? el('span', { class: 'saat' }, el('b', { text: g.bas }), el('span', { text: g.bit })) : null,
-    metin,
-    el('button', { class: 'daha', type: 'button', 'aria-label': 'Seçenekler: ' + g.baslik, disabled: g.gecici || null, onclick: () => gorevSayfasi(g) }, ikon('daha')));
+    }, ikon('tik'));
+    if (numara && !g.bitti) { tik.replaceChildren(); tik.classList.add('numara'); tik.textContent = String(numara); }
+
+    return el('div', { class: 'satir' + (g.bitti ? ' bitti' : '') + (g.gecici ? ' gecici' : ''), 'data-id': g.id },
+      tik, metin,
+      el('button', { class: 'sag-dugme', type: 'button', 'aria-label': 'Seçenekler: ' + g.baslik, disabled: g.gecici || null, onclick: () => gorevSayfasi(g) }, ikon('daha')));
   }
 
   function ekleCubuguKur() {
     if (ekleCubugu && document.body.contains(ekleCubugu)) {
-      ekleGirdi.placeholder = D.secili === bugun() ? 'Ekle · ör. 14:00-15:00 Teklif' : `${gunBasligi(D.secili)} — ekle…`;
+      ekleGirdi.placeholder = D.secili === bugun() ? 'Aklındakini yaz · 14:00-15:00 ile saate koy' : `${gunBasligi(D.secili)} — ekle…`;
       return;
     }
-    ekleGirdi = el('input', { type: 'text', name: 'gorev', autocomplete: 'off', enterkeyhint: 'done', maxlength: '600', 'aria-label': 'Yeni görev' });
+    ekleGirdi = el('input', { type: 'text', name: 'gorev', autocomplete: 'off', enterkeyhint: 'done', maxlength: '600', 'aria-label': 'Yeni iş' });
     ekleDugme = el('button', { type: 'submit', 'aria-label': 'Ekle', disabled: true }, ikon('arti'));
     ekleGirdi.addEventListener('input', () => { ekleDugme.disabled = !ekleGirdi.value.trim(); });
     const form = el('form', { autocomplete: 'off' }, ekleGirdi, ekleDugme);
@@ -418,15 +575,17 @@
     if (yeni && navigator.vibrate) navigator.vibrate(8);
     const r = await islem({ islem: 'isaretle', id: g.id, bitti: yeni });
     if (!r.ok) { g.bitti = !yeni; g.bittiZaman = null; ciz(); hataBildir(r); }
-    else D.guncellendi = null;
+    else {
+      D.guncellendi = null;
+      const crmId = crmIsareti(g);
+      if (yeni && crmId && crmIsi(crmId)?.adres) bildir('Bitti. CRM’de de kapat', 'Aç', () => window.open(crmIsi(crmId).adres, '_blank', 'noopener'), 4000);
+    }
   }
 
-  async function ekle(metin) {
-    const m = String(metin).trim();
-    if (!m) return;
+  /** Sunucuya yeni görev yazar; ekranda geçici satır gösterir. Başarıda görevi döndürür. */
+  async function ekleSunucu(m, gun) {
     const parca = satirAyir(m);
-    if (!parca.baslik) return bildir('Başlık boş olamaz');
-    const gun = D.secili;
+    if (!parca.baslik) { bildir('Başlık boş olamaz'); return null; }
     const gecici = { id: 'gecici-' + (++geciciSayac), gun, sira: 1e9, ...parca, bitti: false, gecici: true };
     D.gorevler.push(gecici);
     ciz();
@@ -436,12 +595,44 @@
       D.gorevler.push(r.v.gorev);
       D.guncellendi = null;
       ciz();
-      if (r.v.gorev.bas) bildir(`${r.v.gorev.bas}–${r.v.gorev.bit} bloğuna eklendi`);
-    } else {
-      ciz();
-      if (ekleGirdi && !ekleGirdi.value) { ekleGirdi.value = m; ekleDugme.disabled = false; }
-      hataBildir(r);
+      return r.v.gorev;
     }
+    ciz();
+    hataBildir(r);
+    return null;
+  }
+
+  async function ekle(metin) {
+    const m = String(metin).trim();
+    if (!m) return;
+    const g = await ekleSunucu(m, D.secili);
+    if (!g) {
+      if (ekleGirdi && !ekleGirdi.value) { ekleGirdi.value = m; ekleDugme.disabled = false; }
+      return;
+    }
+    if (g.bas) bildir(`${g.bas}–${g.bit} saatine kondu`);
+  }
+
+  /** CRM işini DeepCore'a al: bugüne, istenirse saatle ya da Bugünün 3'üne. */
+  async function crmAl(i, { bas, bit, ust } = {}) {
+    sayfaKapat();
+    const alan = alanBul(i.proje);
+    const baslik = i.baslik.replace(/\|/g, '/').replace(/[⟨⟩]/g, '');
+    const m = `${alan && alan.renk ? `[${alan.ad}] ` : ''}${bas ? `${bas}-${bit} ` : ''}${baslik} | ${i.dk || ''} | ⟨crm:${i.id}⟩`.replace('|  |', '|');
+    const g = await ekleSunucu(m, bugun());
+    if (!g) return;
+    if (ust) await ustYap(g, true);
+    bildir(bas ? `${bas}–${bit} saatine kondu` : ust ? 'Bugünün 3’üne kondu' : 'Bugüne alındı');
+  }
+
+  async function ustYap(g, deger) {
+    if (deger && !g.ust && ustler(g.gun).length >= 3) return bildir('Üç iş dolu — önce birini çıkar');
+    const eski = g.ust;
+    g.ust = deger;
+    ciz();
+    const r = await islem({ islem: 'duzenle', id: g.id, ust: deger });
+    if (!r.ok) { g.ust = eski; ciz(); hataBildir(r); }
+    else { Object.assign(g, r.v.gorev); D.guncellendi = null; }
   }
 
   async function tasi(g, gun) {
@@ -467,7 +658,7 @@
     if (!r.ok) { eski.forEach(([g, gun, sira]) => { g.gun = gun; g.sira = sira; }); ciz(); return hataBildir(r); }
     for (const s of r.v.gorevler || []) Object.assign(bul(s.id) || {}, s);
     D.guncellendi = null;
-    bildir(`${liste.length} görev bugüne alındı`);
+    bildir(`${liste.length} iş bugüne alındı`);
   }
 
   async function duzenle(g, degisiklik) {
@@ -475,8 +666,10 @@
     Object.assign(g, degisiklik);
     ciz();
     const r = await islem({ islem: 'duzenle', id: g.id, ...degisiklik });
-    if (!r.ok) { Object.assign(g, eski); ciz(); hataBildir(r); }
-    else { Object.assign(g, r.v.gorev); D.guncellendi = null; }
+    if (!r.ok) { Object.assign(g, eski); ciz(); hataBildir(r); return false; }
+    Object.assign(g, r.v.gorev);
+    D.guncellendi = null;
+    return true;
   }
 
   function sil(g) {
@@ -503,6 +696,130 @@
     const r = await islem({ islem: 'sil', id: b.gorev.id }, keepalive);
     if (!r.ok && r.durum !== 404 && !keepalive) { D.gorevler.push(b.gorev); ciz(); bildir('Silinemedi — geri getirildi'); }
     else if (r.ok) D.guncellendi = null;
+  }
+
+  /* ======================= saate koyma ======================= */
+
+  /** O günün dolu aralıkları (dakika): saatli görevler + toplantılar; haric = yerleştirilen görevin kendisi. */
+  function doluAraliklar(gun, haric) {
+    return [
+      ...gunGorevleri(gun).filter((g) => g.bas && g !== haric && !g.bitti).map((g) => [dkSaat(g.bas), dkSaat(g.bit)]),
+      ...gunToplantilari(gun).map((x) => [x.b, x.e])
+    ];
+  }
+
+  function bosBaslangiclar(gun, sure, haric, adet = 8) {
+    const dolu = doluAraliklar(gun, haric);
+    let bas = 9 * 60;
+    if (gun === bugun()) bas = Math.max(7 * 60, Math.ceil((suAnDk() + 5) / 30) * 30);
+    else if (gun < bugun()) bas = 9 * 60;
+    const sonuc = [];
+    for (let b = bas; b + sure <= 24 * 60 && sonuc.length < adet; b += 30) {
+      if (!dolu.some(([x, y]) => b < y && x < b + sure)) sonuc.push(b);
+    }
+    return sonuc;
+  }
+
+  function varsayilanSure(dk) {
+    if (!dk) return 60;
+    return Math.max(15, Math.min(240, Math.round(dk / 15) * 15));
+  }
+
+  /** Bir işi saate koy: başlangıç ve süre çipleri. oge = { tur: 'gorev', g } | { tur: 'crm', i } */
+  function yerlestirSayfasi(oge) {
+    const gun = oge.tur === 'gorev' ? oge.g.gun : bugun();
+    const baslik = oge.tur === 'gorev' ? oge.g.baslik : oge.i.baslik;
+    const haric = oge.tur === 'gorev' ? oge.g : null;
+    let sure = varsayilanSure(oge.tur === 'gorev' ? (oge.g.bas ? dkSaat(oge.g.bit) - dkSaat(oge.g.bas) : oge.g.dk) : oge.i.dk);
+    let secili = null;
+    const surelerKutu = el('div', { class: 'cipler' });
+    const saatlerKutu = el('div', { class: 'cipler' });
+    const ozet = el('p', { class: 'yerlestir-ozet' });
+    const koy = el('button', { class: 'birincil', type: 'button', disabled: true, style: 'width:100%' }, 'Saate koy');
+
+    const yenile = () => {
+      surelerKutu.replaceChildren(...[15, 30, 45, 60, 90, 120, 180].map((s) => el('button', {
+        class: 'cip', type: 'button', 'aria-pressed': String(s === sure), onclick: () => { sure = s; yenile(); }
+      }, sureYaz(s))));
+      const bos = bosBaslangiclar(gun, sure, haric);
+      if (secili !== null && !bos.includes(secili)) secili = null;
+      if (secili === null && bos.length) secili = bos[0];
+      saatlerKutu.replaceChildren(...(bos.length ? bos.map((b) => el('button', {
+        class: 'cip', type: 'button', 'aria-pressed': String(b === secili), onclick: () => { secili = b; yenile(); }
+      }, saatDk(b))) : [el('p', { class: 'bolum-not', text: 'Bu süreye boş saat kalmadı. Süreyi kısalt.' })]));
+      ozet.replaceChildren(...(secili !== null ? [el('b', { text: `${saatDk(secili)}–${saatDk(secili + sure)}` }), ` · ${sureYaz(sure)}`] : []));
+      koy.disabled = secili === null;
+    };
+    koy.addEventListener('click', async () => {
+      if (secili === null) return;
+      const bas = saatDk(secili), bit = saatDk(secili + sure);
+      if (oge.tur === 'crm') return crmAl(oge.i, { bas, bit });
+      sayfaKapat();
+      if (await duzenle(oge.g, { bas, bit })) bildir(`${bas}–${bit} saatine kondu`);
+    });
+    yenile();
+    sayfaAc(
+      el('p', { class: 'sayfa-baslik', text: baslik }),
+      el('p', { class: 'ara-baslik', text: 'Ne kadar sürer?' }), surelerKutu,
+      el('p', { class: 'ara-baslik', text: 'Ne zaman?' }), saatlerKutu,
+      ozet, koy,
+      secenek('Vazgeç', sayfaKapat, null, 'sade'));
+  }
+
+  /** Boş saate dokununca: bu saate ne koyalım? Kafamdakiler + CRM + yeni yaz. */
+  function saateKoySayfasi(gun, dk) {
+    const bas = saatDk(dk);
+    const adaylar = gunGorevleri(gun).filter((g) => !g.bas && !g.bitti && !g.gecici);
+    const crm = gun === bugun() ? crmBekleyen().slice(0, 6) : [];
+    const yaz = el('input', { type: 'text', maxlength: '300', placeholder: 'Yeni iş yaz…', enterkeyhint: 'done', 'aria-label': 'Yeni iş' });
+    const form = el('form', { class: 'duzen' }, yaz);
+    const koy = async (sure, fn) => {
+      const s = Math.min(sure, 24 * 60 - dk);
+      const bit = saatDk(dk + s);
+      sayfaKapat();
+      await fn(bas, bit);
+    };
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const v = yaz.value.trim().replace(/\|/g, '/');
+      if (!v) return yaz.focus();
+      koy(60, async (b, e2) => { const g = await ekleSunucu(`${b}-${e2} ${v}`, gun); if (g) bildir(`${b}–${e2} saatine kondu`); });
+    });
+    sayfaAc(
+      el('p', { class: 'sayfa-baslik', text: `${bas}’a ne koyalım?` }),
+      el('p', { class: 'sayfa-soru', text: 'Bir iş seç ya da yenisini yaz. Süreyi sonra değiştirebilirsin.' }),
+      form,
+      adaylar.length ? el('p', { class: 'ara-baslik', text: 'Kafamdakiler' }) : null,
+      adaylar.map((g) => secenek(g.baslik, () => koy(varsayilanSure(g.dk), async (b, e2) => { if (await duzenle(g, { bas: b, bit: e2 })) bildir(`${b}–${e2} saatine kondu`); }), g.dk ? `${g.dk} dk` : null)),
+      crm.length ? el('p', { class: 'ara-baslik', text: 'CRM’den' }) : null,
+      crm.map((i) => secenek(i.baslik, () => koy(varsayilanSure(i.dk), (b, e2) => crmAl(i, { bas: b, bit: e2 })), i.dk ? `${i.dk} dk` : null)),
+      secenek('Vazgeç', sayfaKapat, null, 'sade'));
+    setTimeout(() => { if (!adaylar.length && !crm.length) yaz.focus(); }, 50);
+  }
+
+  /** Bugünün 3'üne aday seç: günün açık işleri + CRM. */
+  function ustSecSayfasi(gun) {
+    const adaylar = gunGorevleri(gun).filter((g) => !g.ust && !g.bitti && !g.gecici);
+    const crm = gun === bugun() ? crmBekleyen().slice(0, 8) : [];
+    const yaz = el('input', { type: 'text', maxlength: '300', placeholder: 'Ya da yeni yaz…', enterkeyhint: 'done', 'aria-label': 'Yeni önemli iş' });
+    const form = el('form', { class: 'duzen' }, yaz);
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const v = yaz.value.trim();
+      if (!v) return yaz.focus();
+      sayfaKapat();
+      const g = await ekleSunucu(v, gun);
+      if (g) await ustYap(g, true);
+    });
+    sayfaAc(
+      el('p', { class: 'sayfa-baslik', text: 'Bugünün en önemli işi' }),
+      el('p', { class: 'sayfa-soru', text: 'Gün bittiğinde “bunu yaptım” demek istediğin iş.' }),
+      form,
+      adaylar.length ? el('p', { class: 'ara-baslik', text: 'Listende' }) : null,
+      adaylar.map((g) => secenek(g.baslik, () => { sayfaKapat(); ustYap(g, true); }, g.bas ? `${g.bas}` : null)),
+      crm.length ? el('p', { class: 'ara-baslik', text: 'CRM’den' }) : null,
+      crm.map((i) => secenek(i.baslik, () => crmAl(i, { ust: true }), i.gecikti ? 'gecikti' : null)),
+      secenek('Vazgeç', sayfaKapat, null, 'sade'));
   }
 
   /* ======================= derin odak ======================= */
@@ -543,7 +860,7 @@
         el('p', { class: 'odak-kural', text: 'Telefonu bırak. Tek iş. Bitince bas.' }),
         el('div', { class: 'odak-dugmeler' },
           el('button', { class: 'birincil', type: 'button', onclick: () => odakBitir(false) }, 'Bitir'),
-          el('button', { class: 'secenek sade', type: 'button', onclick: () => odakBitir(true) }, 'Dağıldım, bırak'))));
+          el('button', { class: 'sade-beyaz', type: 'button', onclick: () => odakBitir(true) }, 'Dağıldım, bırak'))));
     document.body.append(odakEkrani);
     if (ekleCubugu) ekleCubugu.hidden = true;
     const tik = () => {
@@ -620,21 +937,58 @@
   }
 
   function secenek(metin, is, ek, sinif) {
-    return el('button', { class: 'secenek' + (sinif ? ' ' + sinif : ''), type: 'button', onclick: is }, metin, ek ? el('small', { text: ek }) : null);
+    return el('button', { class: 'secenek' + (sinif ? ' ' + sinif : ''), type: 'button', onclick: is }, el('span', { text: metin }), ek ? el('small', { text: ek }) : null);
+  }
+  function bag(metin, href, ek) {
+    return el('a', { class: 'secenek', href, target: href.startsWith('/') ? null : '_blank', rel: 'noopener noreferrer', style: 'text-decoration:none' },
+      el('span', { text: metin }), ek ? el('small', { text: ek }) : null);
   }
 
   function gorevSayfasi(g) {
     if (g.gecici) return;
     const b = bugun();
     const yarin = gunEkle(b, 1);
+    const crmId = crmIsareti(g);
+    const crmAdres = crmId && crmIsi(crmId)?.adres;
+    const not = notGoster(g.not);
     sayfaAc(
       el('p', { class: 'sayfa-baslik', text: g.baslik }),
+      not ? el('p', { class: 'sayfa-soru', text: not }) : null,
       !g.bitti ? secenek('Odaklan', () => odakBaslat(g), g.bas ? `${g.bas}–${g.bit}` : (g.dk ? `${g.dk} dk` : '50 dk')) : null,
+      secenek(g.bitti ? 'Geri al' : 'Bitti', () => { sayfaKapat(); isaretle(g); }),
+      secenek(g.ust ? 'Bugünün 3’ünden çıkar' : 'Bugünün 3’üne koy', () => { sayfaKapat(); ustYap(g, !g.ust); }),
+      secenek(g.bas ? 'Saati değiştir' : 'Saate koy', () => yerlestirSayfasi({ tur: 'gorev', g }), g.bas ? `${g.bas}–${g.bit}` : null),
+      g.bas ? secenek('Saati kaldır', () => { sayfaKapat(); duzenle(g, { bas: null, bit: null }); }) : null,
       g.gun !== b ? secenek('Bugüne al', () => { sayfaKapat(); tasi(g, b); }) : null,
       g.gun !== yarin ? secenek('Yarına at', () => { sayfaKapat(); tasi(g, yarin); }) : null,
       secenek('Başka güne…', () => gunSecSayfasi(g)),
-      secenek('Düzenle', () => duzenleSayfasi(g), g.bas ? 'saat, başlık, not' : 'saat ver, başlık, not'),
+      secenek('Düzenle', () => duzenleSayfasi(g)),
+      crmAdres ? bag('CRM’de aç', crmAdres) : null,
       secenek('Sil', () => { sayfaKapat(); sil(g); }, null, 'tehlike'),
+      secenek('Vazgeç', sayfaKapat, null, 'sade'));
+  }
+
+  function crmSayfasi(i) {
+    const TUR = { takip: 'Müşteri takibi', dogrula: 'Doğrulaman bekleniyor', is: 'Sana verilen görev', oneri: 'Sana önerilen görev' };
+    const ek = [TUR[i.tur], i.proje, i.gecikti ? 'gecikti' : null].filter(Boolean).join(' · ');
+    sayfaAc(
+      el('p', { class: 'sayfa-baslik', text: i.baslik }),
+      el('p', { class: 'sayfa-soru', text: ek }),
+      secenek('Bugüne al', () => crmAl(i, {})),
+      secenek('Bugünün 3’üne koy', () => crmAl(i, { ust: true })),
+      secenek('Saate koy', () => yerlestirSayfasi({ tur: 'crm', i }), i.dk ? `${i.dk} dk` : null),
+      i.adres ? bag('CRM’de aç', i.adres) : null,
+      secenek('Vazgeç', sayfaKapat, null, 'sade'));
+  }
+
+  function toplantiSayfasi(t, b, e) {
+    const k = t.kisi || {};
+    sayfaAc(
+      el('p', { class: 'sayfa-baslik', text: toplantiAdi(t) }),
+      el('p', { class: 'sayfa-soru', text: [`${saatDk(b)}–${saatDk(e)}`, t.kaynak === 'randevu' ? 'Karttan randevu' : null, k.firma].filter(Boolean).join(' · ') }),
+      t.meet ? bag('Meet’e katıl', t.meet) : null,
+      t.crmAdres ? bag('CRM kartını aç', t.crmAdres) : null,
+      bag('Toplantılar ekranında aç', '/toplanti/'),
       secenek('Vazgeç', sayfaKapat, null, 'sade'));
   }
 
@@ -659,36 +1013,29 @@
   }
 
   function duzenleSayfasi(g) {
+    const isaret = crmIsareti(g);
     const baslik = el('input', { id: 'd-baslik', type: 'text', maxlength: '300', value: g.baslik, required: true });
-    const bas = el('input', { id: 'd-bas', type: 'time', step: '300', value: g.bas || '' });
-    const bit = el('input', { id: 'd-bit', type: 'time', step: '300', value: g.bit && g.bit !== '24:00' ? g.bit : (g.bit ? '23:59' : '') });
-    const not = el('textarea', { id: 'd-not', maxlength: '4000', placeholder: 'Not…' });
-    not.value = g.not || '';
-    const hata = el('p', { class: 'hata', role: 'alert' });
+    const not = el('textarea', { id: 'd-not', maxlength: '3900', placeholder: 'Not…' });
+    not.value = notGoster(g.not);
     const form = el('form', { class: 'duzen' },
       el('label', { for: 'd-baslik', text: 'Başlık' }), baslik,
-      el('label', { for: 'd-bas', text: 'Saat (boş bırakırsan saatsiz)' }),
-      el('div', { class: 'saat-satir' }, bas, el('span', { text: '–' }), bit),
-      el('label', { for: 'd-not', text: 'Not' }), not, hata,
+      el('label', { for: 'd-not', text: 'Not' }), not,
       el('button', { class: 'birincil', type: 'submit' }, 'Kaydet'));
     form.addEventListener('submit', (e) => {
       e.preventDefault();
       const b = baslik.value.trim();
       if (!b) return baslik.focus();
-      let s1 = bas.value || null, s2 = bit.value || null;
-      if (s2 === '23:59') s2 = '24:00';
-      if (Boolean(s1) !== Boolean(s2)) { hata.textContent = 'Başlangıç ve bitişi birlikte yaz ya da ikisini de boş bırak.'; return; }
-      if (s1 && s2 <= s1) { hata.textContent = 'Bitiş başlangıçtan sonra olmalı.'; return; }
       sayfaKapat();
-      duzenle(g, { baslik: b, not: not.value.trim(), bas: s1, bit: s2 });
+      const n = not.value.trim();
+      duzenle(g, { baslik: b, not: isaret ? `${n}${n ? ' ' : ''}⟨crm:${isaret}⟩` : n });
     });
     sayfaAc(form, secenek('Vazgeç', sayfaKapat, null, 'sade'));
   }
 
   function kapanisSayfasi() {
-    const maddeler = ['Bugünün listesine son kez baktım', 'Kalanları yarına ya da başka güne attım', 'Yarının saatlerini çizdim'];
+    const maddeler = ['Bugünün listesine son kez baktım', 'Kalanları yarına ya da başka güne attım', 'Yarının 3’ünü ve saatlerini çizdim'];
     const kutular = maddeler.map((m, i) => el('input', { type: 'checkbox', id: 'k-' + i }));
-    const tamam = el('button', { class: 'birincil', type: 'button', disabled: true }, 'Kapanış tamam');
+    const tamam = el('button', { class: 'birincil', type: 'button', disabled: true, style: 'width:100%' }, 'Kapanış tamam');
     kutular.forEach((k) => k.addEventListener('change', () => { tamam.disabled = !kutular.every((x) => x.checked); }));
     tamam.addEventListener('click', async () => {
       sayfaKapat();
@@ -697,7 +1044,7 @@
       ciz();
       const r = await islem({ islem: 'kapanis', gun });
       if (!r.ok) { D.kapanislar = D.kapanislar.filter((x) => x !== gun); ciz(); return hataBildir(r); }
-      bildir('Kapanış tamam. İş bitti, kafa boş.');
+      bildir('Gün kapandı. İş bitti, kafa boş.');
     });
     const acikSayi = gunGorevleri(D.secili).filter((g) => !g.bitti).length;
     sayfaAc(
@@ -715,7 +1062,7 @@
     const girdi = el('input', { id: 'h-saat', type: 'number', min: '0', max: '80', step: '1', inputmode: 'numeric', value: String(D.ayarlar.haftalikDerinHedef) });
     const form = el('form', { class: 'duzen' },
       el('label', { for: 'h-saat', text: 'Haftalık derin iş hedefi (saat)' }), girdi,
-      el('p', { class: 'aciklama', text: 'Yalnız Odaklan ile geçen süre sayılır. Newport: tek ölçü derin saat.' }),
+      el('p', { class: 'aciklama', text: 'Yalnız Odaklan ile geçen süre sayılır.' }),
       el('button', { class: 'birincil', type: 'submit' }, 'Kaydet'));
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -731,9 +1078,13 @@
   }
 
   function menuAc() {
+    const crm = crmKoku();
     sayfaAc(
       el('p', { class: 'sayfa-baslik', text: 'DeepCore' }),
-      secenek('Yenile', async () => { sayfaKapat(); await senkron(true); bildir('Güncel'); }),
+      secenek('Yenile', async () => { sayfaKapat(); await Promise.all([senkron(true), disYukle()]); bildir('Güncel'); }),
+      bag('Toplantılar', '/toplanti/', 'takvim'),
+      crm ? bag('Nexus CRM', crm + '/merkez/benim', 'işlerim') : null,
+      bag('Dijital kart', '/', 'randevu linki'),
       secenek('Haftalık derin hedef', hedefSayfasi, `${D.ayarlar.haftalikDerinHedef} sa`),
       secenek('Yedeği indir', () => { sayfaKapat(); yedekIndir(); }, 'JSON'),
       secenek('Çıkış yap', async () => { sayfaKapat(); await silmeyiGonder(); await istek('/cikis', {}); girisGoster('Çıkış yapıldı.'); }, null, 'tehlike'),
@@ -775,13 +1126,13 @@
     if (bagimsiz || depoOku('dc_ipucu') === 'gec') return null;
     const kapat = () => { depoYaz('dc_ipucu', 'gec'); ciz(); };
     if (kurulumOlayi) {
-      return el('div', { class: 'serit-uyari bilgi' },
+      return el('div', { class: 'serit-uyari', style: 'margin-top:18px' },
         el('p', {}, 'Ana ekrana ekle', el('small', { text: 'Uygulama gibi tek dokunuşla açılır.' })),
         el('button', { type: 'button', onclick: async () => { kurulumOlayi.prompt(); await kurulumOlayi.userChoice.catch(() => null); kurulumOlayi = null; kapat(); } }, 'Ekle'));
     }
     if (!/iPhone|iPad|iPod/.test(navigator.userAgent)) return null;
-    return el('div', { class: 'serit-uyari bilgi' },
-      el('p', {}, 'Ana ekrana ekle', el('small', { text: 'Safari’de Paylaş → Ana Ekrana Ekle. Uygulama gibi açılır.' })),
+    return el('div', { class: 'serit-uyari', style: 'margin-top:18px' },
+      el('p', {}, 'Ana ekrana ekle', el('small', { text: 'Safari’de Paylaş → Ana Ekrana Ekle.' })),
       el('button', { type: 'button', onclick: kapat }, 'Tamam'));
   }
 
@@ -800,7 +1151,7 @@
     const dugme = el('button', { class: 'birincil', type: 'submit' }, 'Giriş');
     const form = el('form', { autocomplete: 'on' },
       el('h1', { text: 'DeepCore' }),
-      el('p', { text: mesaj || 'Planına girmek için şifreni yaz. Bu cihaz 6 ay hatırlar.' }),
+      el('p', { text: mesaj || 'Şifreni yaz. Bu cihaz 6 ay hatırlar.' }),
       kullanici, sifre, hata, dugme);
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -833,10 +1184,11 @@
 
   async function senkron(zorla) {
     if (!zorla && (bekleyenIslem || D.bekleyenSil || document.hidden || acikSayfa || odakEkrani)) return;
+    if (!zorla && Date.now() - disZamani > 5 * 60e3) disYukle();
     const r = await istek('');
     if (!r.ok) return;
     if (!zorla && r.v.guncellendi && r.v.guncellendi === D.guncellendi) {
-      if (D.secili === bugun()) ciz();                 // "Şimdi" kartı saatle değişir
+      if (D.secili === bugun()) ciz();                 // "Şimdi" kartı ve şimdi çizgisi saatle değişir
       return;
     }
     if (!zorla && (bekleyenIslem || D.bekleyenSil)) return;
@@ -851,7 +1203,7 @@
     if (document.hidden) silmeyiGonder(true);
     else {
       if (odakEkrani) ekranAcikKalsin();
-      if (senkronZamanlayici) senkron(false);
+      if (senkronZamanlayici) { senkron(false); if (Date.now() - disZamani > 60e3) disYukle(); }
     }
   });
   addEventListener('pagehide', () => silmeyiGonder(true));
@@ -859,7 +1211,7 @@
   let sonBugun = bugun();
   setInterval(() => {
     const b = bugun();
-    if (b !== sonBugun) { if (D.secili === sonBugun) D.secili = b; sonBugun = b; if (senkronZamanlayici && !odakEkrani) ciz(); }
+    if (b !== sonBugun) { if (D.secili === sonBugun) D.secili = b; sonBugun = b; if (senkronZamanlayici && !odakEkrani) { ciz(); disYukle(); } }
   }, 30e3);
 
   /* ======================= jestler ======================= */
@@ -896,13 +1248,14 @@
       veriAl(r.v);
       ciz();
       senkronBaslat();
+      disYukle();
       const o = acikOdak();
       if (o) odakGoster(o);                            // yarım kalan odak seansı geri gelir
       return;
     }
     if (r.durum === 401) return;
     if (r.durum === 503 && r.v.sebep === 'kurulmadi') {
-      return durumEkrani('Kurulmadı', 'Sunucuda ', el('code', { text: 'PLAN_SIFRE' }), ' tanımlı değil. Coolify ortam değişkenlerine ekleyip yeniden dağıt.');
+      return durumEkrani('Kurulmadı', 'Sunucuda ', el('code', { text: 'PLAN_SIFRE' }), ' tanımlı değil.');
     }
     if (r.durum === 503 && r.v.sebep === 'depolama') {
       return durumEkrani('Kayıt yapılamıyor', 'Sunucu veri klasörüne yazamıyor. Coolify → Storages → ', el('code', { text: '/app/veri' }), ' birimini kontrol et.');

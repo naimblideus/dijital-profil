@@ -18,7 +18,7 @@ import crypto from 'node:crypto';
 import { ayarlar, kimlikVarMi, erisimJetonu, mesgulAraliklar, cakisiyorMu, slotlariUret, takvimKoku } from './takvim.mjs';
 import { SEKIL_ADI, ofisAdresi, meetLinki, temizle } from './randevu.mjs';
 import { planKurulduMu, planYetkili, anahtarEsit, kokenUyarMi } from './plan.mjs';
-import { crmAyarli, crmAra, crmToplantiYaz, crmAdresi } from './crm.mjs';
+import { crmAyarli, crmAra, crmToplantiYaz, crmAdresi, crmIsler } from './crm.mjs';
 import { mesaj, waLinki } from '../site/toplanti/mesaj.mjs';
 
 const GOVDE_SINIRI = 16 * 1024;
@@ -418,7 +418,8 @@ const ROTALAR = {
   '/api/toplanti/iptal': ['POST', iptal],
   '/api/toplanti/gorustuk': ['POST', gorustuk],
   '/api/toplanti/crm': ['POST', crmeYaz],
-  '/api/toplanti/taslak-al': ['POST', taslakAl]
+  '/api/toplanti/taslak-al': ['POST', taslakAl],
+  '/api/toplanti/isler': ['GET', crmIsler]
 };
 
 /**

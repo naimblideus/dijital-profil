@@ -368,6 +368,7 @@ function islemUygula(d, v) {
         g.dk = v.dk;
       }
       if (v.bas !== undefined || v.bit !== undefined) Object.assign(g, saatAraligi(v.bas ?? null, v.bit ?? null));
+      if (v.ust !== undefined) g.ust = v.ust === true;      // "Bugünün 3'ü"
       g.duzenlendi = true;               // sonraki plan yüklemesi elle düzeltmeyi ezmez
       return { gorev: g };
     }

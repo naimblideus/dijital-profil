@@ -515,3 +515,22 @@ test('kartın randevu bölümü #randevu ile doğrudan açılır (gönderilen li
   const js = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'site', 'kart.js'), 'utf8');
   assert.ok(js.includes("location.hash === '#randevu'"));
 });
+
+test('★ DeepCore ← CRM: bugünkü işlerim okunur, kişi verisi yok, adres CRM köküne bağlı; CRM yoksa kapalı', async () => {
+  crmBagla();
+  const r = await api('/api/toplanti/isler');
+  assert.equal(r.durum, 200);
+  assert.equal(r.v.durum, 'tamam');
+  assert.equal(r.v.isler.length, 4);
+  const takip = r.v.isler.find((i) => i.tur === 'takip');
+  assert.equal(takip.gecikti, true);
+  assert.equal(takip.adres, crm.kok + '/firma/k1');
+  assert.equal(r.v.isler[0].adres, crm.kok + '/merkez/benim');
+  const istek = crm.durum.istekler.find((i) => i.yol === '/api/deepcore');
+  assert.deepEqual(istek.govde, { kisi: 'Mehmet Naim' });
+
+  assert.equal((await ham('/api/toplanti/isler')).durum, 401);
+  crmKopar();
+  assert.equal((await api('/api/toplanti/isler')).v.durum, 'kapali');
+  crmBagla();
+});

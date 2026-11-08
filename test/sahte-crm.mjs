@@ -15,7 +15,13 @@ export async function sahteCrmBaslat({ jeton = 'sahte-crm-jetonu', port = 0 } = 
     kisiler: SAHTE_KISILER.map((k) => ({ ...k })),
     hata: false,           // her POST /api/toplanti → 500
     yanitla: null,         // (govde) => null | { kod, govde } — planla yanıtını değiştirmek için
-    sayac: 0
+    sayac: 0,
+    isler: [               // POST /api/deepcore yanıtı
+      { kaynak: 'gorev', tur: 'dogrula', id: 'g60', baslik: 'Doğrula: Kurulum provası', proje: 'nexus-servis', oncelik: 1, dk: 10, tarih: null, gecikti: false, yol: '/merkez/benim' },
+      { kaynak: 'takip', tur: 'takip', id: 'fk1', baslik: 'Kobas Büro — teklifi sor', proje: 'Nextus Servis', oncelik: 1, dk: 15, tarih: new Date(Date.now() - 86400e3).toISOString(), gecikti: true, yol: '/firma/k1' },
+      { kaynak: 'gorev', tur: 'oneri', id: 'g61', baslik: 'Saygılı ile paket limiti konuşmasını yap', proje: 'nexus-servis', oncelik: 1, dk: 30, tarih: null, gecikti: false, yol: '/merkez/benim' },
+      { kaynak: 'gorev', tur: 'oneri', id: 'g27', baslik: 'Makine Takip Kapı 0 yayınını yap', proje: 'makine-takip', oncelik: 2, dk: 15, tarih: null, gecikti: false, yol: '/merkez/benim' }
+    ]
   };
 
   const sunucu = http.createServer((istek, cevap) => {
@@ -33,6 +39,10 @@ export async function sahteCrmBaslat({ jeton = 'sahte-crm-jetonu', port = 0 } = 
       if (istek.headers['x-nexus-token'] !== jeton) return gonder(401, { ok: false, hata: 'yetkisiz' });
       if (istek.method !== 'POST') return gonder(405, { ok: false });
 
+      if (url.pathname === '/api/deepcore') {
+        if (govde.kisi !== 'Mehmet Naim') return gonder(404, { ok: false, hata: 'kisi-yok' });
+        return gonder(200, { ok: true, kisi: govde.kisi, isler: durum.isler });
+      }
       if (url.pathname === '/api/toplanti/ara') {
         const q = String(govde.q || '').toLocaleLowerCase('tr-TR');
         const rakam = q.replace(/\D/g, '');

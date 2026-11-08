@@ -85,3 +85,37 @@ export async function crmToplantiYaz(govde) {
   if (r.durum === 404) return { durum: 'bulunamadi' };
   return { durum: 'hata' };
 }
+
+/**
+ * DeepCore'un "bugün" listesi: CRM'deki görevlerim, doğrulamam gerekenler, bugün/gecikmiş takipler.
+ * Yalnız okur. Kişi adı NEXUS_CRM_KISI (varsayılan "Mehmet Naim") — CRM'deki kullanıcı adı.
+ *   → { durum: 'tamam', isler: [...] } | { durum: 'kapali' | 'hata' | 'bekliyor' }
+ */
+export async function crmIsler() {
+  if (!crmAyarli()) return { durum: 'kapali', isler: [] };
+  const r = await crmIstek('/api/deepcore', { kisi: process.env.NEXUS_CRM_KISI || 'Mehmet Naim' });
+  if (r.durum === 404 && r.v.hata !== 'kisi-yok') return { durum: 'bekliyor', isler: [] };   // CRM'de uç henüz yayında değil
+  if (!r.ok || !Array.isArray(r.v.isler)) return { durum: 'hata', isler: [] };
+  const metin = (x, n) => (typeof x === 'string' ? x.slice(0, n) : null);
+  const TURLER = new Set(['is', 'dogrula', 'oneri', 'takip']);
+  const yolAdresi = (yol) => {
+    if (yol === '/merkez/benim') return crmKoku() + yol;
+    return crmAdresi(yol);
+  };
+  return {
+    durum: 'tamam',
+    isler: r.v.isler.slice(0, 60)
+      .filter((i) => i && typeof i.id === 'string' && /^[gf][A-Za-z0-9_-]{1,60}$/.test(i.id) && TURLER.has(i.tur) && typeof i.baslik === 'string')
+      .map((i) => ({
+        id: i.id,
+        tur: i.tur,
+        baslik: i.baslik.slice(0, 300),
+        proje: metin(i.proje, 80),
+        oncelik: Number.isInteger(i.oncelik) ? i.oncelik : 2,
+        dk: Number.isInteger(i.dk) && i.dk > 0 && i.dk <= 600 ? i.dk : null,
+        tarih: metin(i.tarih, 40),
+        gecikti: i.gecikti === true,
+        adres: yolAdresi(i.yol)
+      }))
+  };
+}
