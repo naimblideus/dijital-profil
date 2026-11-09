@@ -6,6 +6,8 @@
      PLAN_ANAHTAR  yükleme betiğinin anahtarı (en az 24 karakter). Yoksa yükleme yalnız oturumla.
      PLAN_VERI     veri klasörü. Üretimde Coolify kalıcı birimi (/app/veri); değilse
                    her yeniden dağıtımda silinir — arayüz bunu "kalıcı değil" diye gösterir.
+     KAFA_ANAHTAR  "Kafama at" kestirmesinin anahtarı (en az 24 karakter). Yalnız bugüne saatsiz
+                   iş EKLER, hiçbir şey okuyamaz. Yoksa uç kapalıdır (503).
 
    Şifre değişirse tüm oturumlar düşer (imza anahtarı şifreden türer). */
 
@@ -15,6 +17,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { planAyristir, gorevSatiri, gecerliGun, anahtar } from './plan-ayristir.mjs';
+import { istanbulParcalari } from './takvim.mjs';
 
 const BURASI = path.dirname(fileURLToPath(import.meta.url));
 
@@ -53,6 +56,7 @@ export function planBelleginiSifirla() {
   zincir = Promise.resolve();
   denemeKayit = new Map();
   toplamDeneme = [];
+  kafaIzleri = [];
 }
 
 function veriKlasoru() {
@@ -200,6 +204,28 @@ function makineAnahtari() {
   return s.length >= 24 ? s : null;
 }
 
+/** "Kafama at" kestirmesinin dar yetkili anahtarı: yalnız ekleyebilir. */
+function kafaAnahtari() {
+  const s = process.env.KAFA_ANAHTAR || '';
+  return s.length >= 24 ? s : null;
+}
+
+function kafaYetkili(ctx) {
+  const k = kafaAnahtari();
+  const yetki = String(ctx.basliklar.authorization || '');
+  return Boolean(k) && /^Bearer\s+/i.test(yetki) && esit(yetki.replace(/^Bearer\s+/i, '').trim(), k);
+}
+
+/** İstanbul'da bugünün tarihi (YYYY-AA-GG). */
+export function istanbulBugun(simdi = new Date()) {
+  const p = istanbulParcalari(simdi);
+  return `${p.yil}-${String(p.ay + 1).padStart(2, '0')}-${String(p.gun).padStart(2, '0')}`;
+}
+
+// Anahtar sızarsa planı çöple doldurmasın: dakikada en çok bu kadar ekleme.
+const KAFA_DAKIKA_SINIRI = 20;
+let kafaIzleri = [];
+
 /** Sabit süreli karşılaştırma; uzunluk farkı da sızmaz. */
 function esit(a, b) {
   const x = crypto.createHash('sha256').update(String(a)).digest();
@@ -264,6 +290,13 @@ function yanlisKaydet(ip) {
   izler.push(simdi);
   denemeKayit.set(ip, izler);
   toplamDeneme.push(simdi);
+}
+
+/** Bir günün görevleri (kopya) — Telegram hatırlatması okur, yazmaz. */
+export async function planGorevleri(gun) {
+  await zincir;
+  const b = yukle();
+  return b.durum.gorevler.filter((g) => g.gun === gun).map((g) => ({ ...g }));
 }
 
 /* Toplantı ekranı (/toplanti) AYNI girişi kullanır: ayrı şifre yok, aynı çerez, aynı makine anahtarı. */
@@ -533,6 +566,34 @@ export async function planIstegi(ctx) {
         const v = jsonGovde(ctx);
         const sonuc = await degistir((d) => islemUygula(d, v));
         return cevap(200, { tamam: true, ...sonuc });
+      }
+      case '/api/plan/kafa': {
+        // iPhone "Kafama at" kestirmesi: dikte edilen metin bugüne saatsiz iş olarak düşer.
+        // Kestirmenin anahtarı yalnız buraya yetkilidir; plana ait hiçbir şeyi döndürmez.
+        if (ctx.yontem !== 'POST') return cevap(405, { sebep: 'yontem' });
+        if (!kafaYetkili(ctx) && !yetkili(ctx)) {
+          return cevap(kafaAnahtari() ? 401 : 503, { sebep: kafaAnahtari() ? 'anahtar' : 'kapali' });
+        }
+        const simdi = Date.now();
+        kafaIzleri = kafaIzleri.filter((t) => simdi - t < 60e3);
+        if (kafaIzleri.length >= KAFA_DAKIKA_SINIRI) return cevap(429, { sebep: 'cok-fazla' });
+        const v = jsonGovde(ctx);
+        if (typeof v.metin !== 'string') throw new PlanHatasi(400, 'metin');
+        const baslik = v.metin.replace(/\s+/g, ' ').trim().slice(0, 300);
+        if (!baslik) throw new PlanHatasi(400, 'metin');
+        kafaIzleri.push(simdi);
+        const gun = istanbulBugun();
+        await degistir((d) => {
+          const zaman = new Date().toISOString();
+          d.gorevler.push({
+            id: 'e-' + crypto.randomBytes(5).toString('hex'),
+            gun, gunIlk: gun, sira: sonSira(d, gun) + 1,
+            alan: null, baslik, dk: null, not: '',
+            bas: null, bit: null,
+            bitti: false, bittiZaman: null, kaynak: 'kafa', olusturuldu: zaman
+          });
+        });
+        return cevap(200, { tamam: true, baslik });
       }
       case '/api/plan/yukle': {
         if (ctx.yontem !== 'POST') return cevap(405, { sebep: 'yontem' });

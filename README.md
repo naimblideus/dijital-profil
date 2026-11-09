@@ -28,6 +28,34 @@ node test/yerel.mjs 3092 --takvimsiz --plan=plan.md # yerelde, şifre: yerel-sif
 Plan yeniden yüklenince kopya oluşmaz; yapılmış, taşınmış, elle düzeltilmiş görev korunur,
 bilerek silinen geri gelmez, elle eklenene dokunulmaz. Günlük yedek `PLAN_VERI/yedek/` (30 gün).
 
+### "Kafama at" — iPhone'dan sesle iş ekleme
+
+`POST /api/plan/kafa` (`Authorization: Bearer <KAFA_ANAHTAR>`, gövde `{"metin": "…"}`) söylenen
+cümleyi **bugüne, saatsiz** iş olarak ekler; ekranda "Kafamdakiler"de görünür. Anahtar yalnız
+ekleyebilir: planı okuyamaz, düzenleyemez (dakikada en çok 20 ekleme).
+
+Kestirmeler → **+** → adı **Kafama at**:
+1. **Metni Dikte Et** (Dil: Türkçe, Dinlemeyi Durdur: Duraklamadan Sonra).
+2. **URL'nin İçeriğini Al** → URL `https://naim.nextusservis.com/api/plan/kafa` · Yöntem **POST** ·
+   Başlıklar: `Authorization` = `Bearer ` + anahtar · İstek Gövdesi **JSON** → anahtar `metin`, değer: *Dikte Edilen Metin*.
+3. **Bildirim Göster**: `Kafana attım ✓`.
+
+Sonra kestirmeyi **Ana Ekrana Ekle**; "Hey Siri, kafama at" de çalışır. Aynı uca paylaşım
+menüsünden ya da Apple Watch'tan da metin gönderilebilir. Anahtar `KAFA_ANAHTAR` (en az 24 karakter);
+kestirmeyi kimseyle paylaşma.
+
+### Telegram hatırlatması
+
+`TELEGRAM_BOT_TOKEN` ve `TELEGRAM_CHAT_ID` varsa sunucu her gün iki kısa mesaj atar
+(İstanbul saati, her biri günde en çok bir kez, yeniden başlatmada tekrarlamaz):
+- **08:30** — Bugünün 3'ü, ilk saat bloğu, kafada bekleyen iş sayısı.
+- **21:00** — Bugün kaç iş bitti; yarının 3'ü seçiliyse "Yarın hazır ✓", değilse "Yarını kur".
+
+Her mesajda "Planı aç" düğmesi var. Saatten sonraki 90 dakika içinde gider; sunucu o arada
+kapalıysa o günkü mesaj atlanır. Saatler `HATIRLAT_SABAH` / `HATIRLAT_AKSAM` ile değişir.
+Sohbet kimliği: bota bir kez `/start` yaz, sonra `https://api.telegram.org/bot<anahtar>/getUpdates`
+çıktısındaki `chat.id` (bot webhook kullanıyorsa bu boş döner; kimliği botun kendi kaydından al).
+
 ## Toplantılar — `/toplanti`
 
 Görüşmeleri tek ekrandan yönetmek için; **DeepCore ile aynı giriş** (ayrı şifre yok).
@@ -133,6 +161,9 @@ Domains `https://naim.nextusservis.com`. Plan için **Storages → Volume Mount 
 | `NEXUS_CRM_URL` | CRM için | Ör. `https://crm.nextusservis.com`. Yoksa toplantılar yalnız takvime yazılır |
 | `NEXUS_CRM_TOKEN` | CRM için | CRM'deki `WEBHOOK_TOKEN`'ın **aynısı** (`x-nexus-token`) |
 | `TOPLANTI_ANAHTAR` | kestirme için | En az 24 karakter; yalnız `/api/toplanti/taslak` |
+| `KAFA_ANAHTAR` | "Kafama at" için | En az 24 karakter; yalnız `/api/plan/kafa` (ekler, okuyamaz). Yoksa uç kapalı |
+| `TELEGRAM_BOT_TOKEN` · `TELEGRAM_CHAT_ID` | hatırlatma için | İkisi de yoksa hatırlatma kapalı |
+| `HATIRLAT_SABAH` · `HATIRLAT_AKSAM` | hayır | Varsayılan `08:30` · `21:00` (İstanbul) |
 | `KART_ADRESI` | hayır | Randevu linkinin kökü; varsayılan `https://naim.nextusservis.com/` |
 
 Google bulut projesinde OAuth onay ekranı **yayında (In production)** olmalı; "Testing"
