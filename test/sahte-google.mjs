@@ -55,7 +55,8 @@ export async function sahteGoogleBaslat(port = 0) {
         const surum = url.searchParams.get('conferenceDataVersion');
         durum.etkinlikler.push({ takvim: decodeURIComponent(e[1]), sendUpdates: url.searchParams.get('sendUpdates'), surum, govde: etkinlik });
         const id = 'etk' + (++durum.sayac);
-        durum.mesgul.push({ start: etkinlik.start.dateTime, end: etkinlik.end.dateTime, etkinlikId: id });
+        // Gerçek freeBusy gibi: "boş" (transparent) etkinlik dolu sayılmaz.
+        if (etkinlik.transparency !== 'transparent') durum.mesgul.push({ start: etkinlik.start.dateTime, end: etkinlik.end.dateTime, etkinlikId: id });
         const cevapGovde = { id, htmlLink: 'https://calendar.google.com/event?eid=sahte' };
         if (surum === '1' && etkinlik.conferenceData && etkinlik.conferenceData.createRequest && !durum.meetYok) {
           cevapGovde.hangoutLink = 'https://meet.google.com/abc-defg-hij';

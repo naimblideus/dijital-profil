@@ -136,7 +136,9 @@
     secili: bugun(), acikNotlar: new Set(), bekleyenSil: null,
     crm: { durum: 'yukleniyor', isler: [] },     // CRM'den bugünkü işlerim
     toplantilar: [],                             // takvimdeki kişili toplantılar (kart randevuları dahil)
-    crmHepsi: false
+    crmHepsi: false,
+    odak: null,                                  // sunucudaki süren odak (Instagram kestirmesi bunu sorar)
+    takvimAyna: false                            // saatli işler Google Takvim'e de yazılıyor mu
   };
   {
     const istenen = new URLSearchParams(location.search).get('gun');
@@ -219,6 +221,8 @@
     D.kalici = v.kalici !== false;
     D.uyari = v.uyari || null;
     D.guncellendi = v.guncellendi || null;
+    D.odak = v.odak || null;
+    D.takvimAyna = v.takvimAyna === true;
   }
 
   /* ======================= sunucu ======================= */
@@ -462,7 +466,10 @@
   /* --- Kafamdakiler: saatsiz işler + CRM --- */
   function kafamBolumu(gun, liste) {
     const saatsiz = liste.filter((g) => !g.bas && !g.ust);
-    const acik = saatsiz.filter((g) => !g.bitti);
+    const KADRAN_SIRA = { 1: 0, 3: 1, 2: 2 };
+    const acik = saatsiz.filter((g) => !g.bitti)
+      .sort((a, b) => (KADRAN_SIRA[a.kadran] ?? 3) - (KADRAN_SIRA[b.kadran] ?? 3));
+    const siniflanmamis = acik.filter((g) => !g.kadran && !g.gecici);
     const bitmis = saatsiz.filter((g) => g.bitti);
     const parca = [];
     if (saatsiz.length) {
@@ -487,7 +494,10 @@
       parca.push(el('div', { class: 'grup' }, el('div', { class: 'satir bos-satir' },
         el('span', { class: 'metin' }, el('span', { class: 'baslik', text: 'Aklındakini aşağıya yaz.' })))));
     }
-    return bolum('Kafamdakiler', acik.length ? el('small', { text: `${acik.length} açık` }) : null, ...parca);
+    const sag = siniflanmamis.length
+      ? el('button', { class: 'bolum-dugme', type: 'button', onclick: () => matrisSayfasi(siniflanmamis.map((g) => g.id)) }, `Sınıflandır · ${siniflanmamis.length}`)
+      : acik.length ? el('small', { text: `${acik.length} açık` }) : null;
+    return bolum('Kafamdakiler', sag, ...parca);
   }
 
   function crmSatiri(i) {
@@ -513,6 +523,7 @@
     if (g.bas) alt.append(el('span', { text: `${g.bas}–${g.bit}` }));
     else if (g.dk) alt.append(el('span', { text: `${g.dk} dk` }));
     if (crmId) alt.append(el('span', { class: 'rozet oneri', text: 'CRM' }));
+    if (g.kadran && !g.bitti && !g.ust && KADRAN[g.kadran].rozet) alt.append(el('span', { class: 'rozet kadran-' + g.kadran, text: KADRAN[g.kadran].rozet }));
     if (not && !acik) alt.append(el('span', { text: 'not' }));
 
     const metin = el('button', {
@@ -726,7 +737,7 @@
   }
 
   /** Bir işi saate koy: başlangıç ve süre çipleri. oge = { tur: 'gorev', g } | { tur: 'crm', i } */
-  function yerlestirSayfasi(oge) {
+  function yerlestirSayfasi(oge, sonra) {
     const gun = oge.tur === 'gorev' ? oge.g.gun : bugun();
     const baslik = oge.tur === 'gorev' ? oge.g.baslik : oge.i.baslik;
     const haric = oge.tur === 'gorev' ? oge.g : null;
@@ -755,7 +766,8 @@
       const bas = saatDk(secili), bit = saatDk(secili + sure);
       if (oge.tur === 'crm') return crmAl(oge.i, { bas, bit });
       sayfaKapat();
-      if (await duzenle(oge.g, { bas, bit })) bildir(`${bas}–${bit} saatine kondu`);
+      if (await duzenle(oge.g, { bas, bit })) bildir(`${bas}–${bit} saatine kondu${D.takvimAyna ? ' · takvimde' : ''}`);
+      if (sonra) sonra();
     });
     yenile();
     sayfaAc(
@@ -763,7 +775,7 @@
       el('p', { class: 'ara-baslik', text: 'Ne kadar sürer?' }), surelerKutu,
       el('p', { class: 'ara-baslik', text: 'Ne zaman?' }), saatlerKutu,
       ozet, koy,
-      secenek('Vazgeç', sayfaKapat, null, 'sade'));
+      secenek(sonra ? 'Şimdilik saatsiz bırak' : 'Vazgeç', () => { sayfaKapat(); if (sonra) sonra(); }, null, 'sade'));
   }
 
   /** Boş saate dokununca: bu saate ne koyalım? Kafamdakiler + CRM + yeni yaz. */
@@ -841,6 +853,14 @@
     const o = { baslangic: Date.now(), hedefDk: Math.max(5, Math.min(240, hedef)), baslik: g.baslik, gorevId: g.id, gun: bugun() };
     depoYaz('dc_odak', JSON.stringify(o));
     odakGoster(o);
+    odakBildir(o);
+  }
+
+  /** Sunucuya "odaktayım" de: Instagram kestirmesi bunu sorar. Hedef + 30 dk sonra kendiliğinden düşer. */
+  function odakBildir(o) {
+    const bitis = o ? new Date(o.baslangic + (o.hedefDk + 30) * 60e3).toISOString() : null;
+    D.odak = o ? { bas: new Date(o.baslangic).toISOString(), bitis, baslik: o.baslik } : null;
+    islem({ islem: 'odak', bitis, baslik: o ? o.baslik : '' }, !o).catch(() => {});
   }
 
   async function ekranAcikKalsin() {
@@ -889,6 +909,7 @@
     try { await ekranKilidi?.release(); } catch { /* yoksay */ }
     ekranKilidi = null;
     depoYaz('dc_odak', null);
+    odakBildir(null);
     document.title = 'DeepCore';
     if (odakEkrani) { odakEkrani.remove(); odakEkrani = null; }
     if (ekleCubugu) ekleCubugu.hidden = false;
@@ -944,6 +965,51 @@
       el('span', { text: metin }), ek ? el('small', { text: ek }) : null);
   }
 
+  /* ======================= önem / aciliyet ======================= */
+
+  const KADRAN = {
+    1: { ad: 'Acil + önemli', alt: 'Bugün yap', kisa: 'Acil + önemli', rozet: 'Acil · önemli' },
+    2: { ad: 'Önemli', alt: 'Saate koy', kisa: 'Önemli', rozet: 'Önemli' },
+    3: { ad: 'Acil, önemsiz', alt: 'Hızlı hallet', kisa: 'Hızlı hallet', rozet: 'Hızlı' },
+    4: { ad: 'İkisi de değil', alt: 'Sil', kisa: 'Gereksiz', rozet: null }
+  };
+
+  /** Kafadakileri tek tek sınıflandır: her iş için 4 kutudan birine dokun, sıradaki gelir. */
+  function matrisSayfasi(idler) {
+    const kalan = idler.slice();
+    const sonraki = () => {
+      let g = null;
+      while (kalan.length && !g) {
+        const x = bul(kalan.shift());
+        if (x && !x.bitti && !x.gecici) g = x;
+      }
+      if (!g) { sayfaKapat(); return bildir('Hepsi sınıflandı ✓'); }
+      const sec = async (k) => {
+        if (k === 4) { sayfaKapat(); sil(g); return setTimeout(sonraki, 50); }
+        const ok = await duzenle(g, { kadran: k });
+        if (!ok) return sayfaKapat();
+        if (k === 1) {
+          if (!g.ust && ustler(g.gun).length < 3) await ustYap(g, true);
+          else if (!g.ust) bildir('Bugünün 3’ü dolu — Kafamdakiler’in en üstünde');
+          return sonraki();
+        }
+        if (k === 2) return yerlestirSayfasi({ tur: 'gorev', g }, sonraki);
+        return sonraki();
+      };
+      const kutu = (k) => el('button', { class: 'kadran kadran-' + k, type: 'button', onclick: () => sec(k) },
+        el('b', { text: KADRAN[k].ad }), el('span', { text: KADRAN[k].alt }));
+      sayfaAc(
+        el('p', { class: 'sayfa-baslik', text: g.baslik }),
+        el('p', { class: 'sayfa-soru', text: kalan.length ? `Bu iş ne? · ${kalan.length} iş daha` : 'Bu iş ne?' }),
+        el('div', { class: 'matris' },
+          el('div', { class: 'matris-eksen', 'aria-hidden': 'true' }, el('span', { text: 'Acil' }), el('span', { text: 'Acil değil' })),
+          kutu(1), kutu(2), kutu(3), kutu(4)),
+        secenek('Sonra bakarım', () => sonraki(), null, 'sade'),
+        secenek('Bitir', sayfaKapat, null, 'sade'));
+    };
+    sonraki();
+  }
+
   function gorevSayfasi(g) {
     if (g.gecici) return;
     const b = bugun();
@@ -957,6 +1023,7 @@
       !g.bitti ? secenek('Odaklan', () => odakBaslat(g), g.bas ? `${g.bas}–${g.bit}` : (g.dk ? `${g.dk} dk` : '50 dk')) : null,
       secenek(g.bitti ? 'Geri al' : 'Bitti', () => { sayfaKapat(); isaretle(g); }),
       secenek(g.ust ? 'Bugünün 3’ünden çıkar' : 'Bugünün 3’üne koy', () => { sayfaKapat(); ustYap(g, !g.ust); }),
+      !g.bitti ? secenek('Önemli mi, acil mi?', () => matrisSayfasi([g.id]), g.kadran ? KADRAN[g.kadran].kisa : null) : null,
       secenek(g.bas ? 'Saati değiştir' : 'Saate koy', () => yerlestirSayfasi({ tur: 'gorev', g }), g.bas ? `${g.bas}–${g.bit}` : null),
       g.bas ? secenek('Saati kaldır', () => { sayfaKapat(); duzenle(g, { bas: null, bit: null }); }) : null,
       g.gun !== b ? secenek('Bugüne al', () => { sayfaKapat(); tasi(g, b); }) : null,
@@ -1249,7 +1316,12 @@
       ciz();
       senkronBaslat();
       disYukle();
-      const o = acikOdak();
+      let o = acikOdak();
+      if (!o && D.odak) {                              // odak başka yerde (ana ekran uygulaması) başladı
+        const bas = Date.parse(D.odak.bas), bitis = Date.parse(D.odak.bitis);
+        o = { baslangic: bas, hedefDk: Math.max(5, Math.round((bitis - bas) / 60e3) - 30), baslik: D.odak.baslik, gorevId: null, gun: bugun() };
+        depoYaz('dc_odak', JSON.stringify(o));
+      }
       if (o) odakGoster(o);                            // yarım kalan odak seansı geri gelir
       return;
     }

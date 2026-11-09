@@ -402,3 +402,28 @@ dialog.sayfa::backdrop { background: rgba(0, 0, 0, .32); animation: sol .25s eas
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* ---------- önem / aciliyet matrisi ---------- */
+.bolum-bas .bolum-dugme { font-weight: 600; }
+.rozet.kadran-1 { background: rgba(255, 59, 48, .14); color: var(--kirmizi); }
+.rozet.kadran-2 { background: var(--vurgu-yumusak); color: var(--vurgu); }
+.rozet.kadran-3 { background: var(--crm-yumusak); color: var(--crm); }
+.matris { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 14px 0 4px; }
+.matris-eksen { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.matris-eksen span { text-align: center; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--metin-2); }
+.kadran {
+  display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-end; gap: 2px;
+  min-height: 92px; padding: 12px 14px; border-radius: 16px; text-align: left;
+  background: var(--kart-2); transition: transform .12s var(--yay);
+}
+.kadran:active { transform: scale(.97); }
+.kadran b { font-size: 16px; font-weight: 700; letter-spacing: -.01em; }
+.kadran span { font-size: 14px; color: var(--metin-2); }
+.kadran-1 { background: rgba(255, 59, 48, .12); }
+.kadran-1 b { color: var(--kirmizi); }
+.kadran-2 { background: var(--vurgu-yumusak); }
+.kadran-2 b { color: var(--vurgu); }
+.kadran-3 { background: var(--crm-yumusak); }
+.kadran-3 b { color: var(--crm); }
+.kadran-4 b { color: var(--metin-2); }
+@media (prefers-reduced-motion: reduce) { .kadran { transition: none; } }

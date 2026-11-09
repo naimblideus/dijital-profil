@@ -8,7 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import musait from './musait.mjs';
 import randevu from './randevu.mjs';
-import { planIstegi, planGovdeSiniri } from './plan.mjs';
+import { planIstegi, planGovdeSiniri, planAynasiBaslat } from './plan.mjs';
 import { toplantiIstegi, toplantiGovdeSiniri } from './toplanti.mjs';
 import { hatirlaticiBaslat } from './hatirlatici.mjs';
 
@@ -283,6 +283,7 @@ if (dogrudan) {
   const sunucu = sunucuOlustur();
   sunucu.listen(port, () => console.log(`[sunucu] ${port} dinleniyor · site: ${KOK}`));
   hatirlaticiBaslat();
+  planAynasiBaslat();
   const kapat = () => sunucu.close(() => process.exit(0));
   process.on('SIGTERM', kapat);
   process.on('SIGINT', kapat);

@@ -44,6 +44,39 @@ Sonra kestirmeyi **Ana Ekrana Ekle**; "Hey Siri, kafama at" de çalışır. Ayn�
 menüsünden ya da Apple Watch'tan da metin gönderilebilir. Anahtar `KAFA_ANAHTAR` (en az 24 karakter);
 kestirmeyi kimseyle paylaşma.
 
+### Önem / aciliyet matrisi
+
+Kafamdakiler'de sınıflanmamış iş varsa başlıkta **Sınıflandır · N** çıkar. Dokununca işler tek tek
+gelir, 4 kutudan birine dokunulur, sıradaki gelir:
+- **Acil + önemli** → Bugünün 3'üne (doluysa Kafamdakiler'in en üstüne)
+- **Önemli** (acil değil) → saat seçilir, iş zaman ızgarasına ve takvime yerleşir
+- **Acil, önemsiz** → "Hızlı" rozetiyle Kafamdakiler'de kalır
+- **İkisi de değil** → silinir (5 sn geri alınabilir)
+
+Bir işin sınıfı sonradan görev menüsündeki **Önemli mi, acil mi?** ile değişir (`kadran` 1–4).
+
+### Takvim aynası
+
+Google bağlıysa saati olan her plan işi Google Takvim'e de yazılır (iPhone Takvim'de görünür):
+"boş" (transparent) olarak — kart randevularını ve toplantı çakışmasını engellemez; blok başlarken
+telefon bir kez uyarır; bitince başına ✓ gelir; saat kalkınca ya da iş silinince etkinlik silinir.
+Tek yön (plan → takvim). Kapatmak için `PLAN_TAKVIM=kapali`.
+
+### Odakta Instagram engeli (iPhone)
+
+Odaklan'a basınca plan sunucuya "odaktayım" der (hedef + 30 dk, en çok 5 saat); Bitir/Dağıldım ile
+düşer. `GET /api/plan/odak` (`Authorization: Bearer <KAFA_ANAHTAR>`) düz metin `evet` / `hayir` döner.
+
+Kestirmeler → **Otomasyon** → **+** → **Uygulama** → Instagram → **Açıldığında** → **Hemen Çalıştır**:
+1. **URL'nin İçeriğini Al** → `https://naim.nextusservis.com/api/plan/odak` · Yöntem GET ·
+   Başlık `Authorization` = `Bearer ` + anahtar.
+2. **Eğer** *URL'nin İçeriği* **şudur** `evet`:
+   **Bildirim Göster** "Odaktasın — işine dön" → **URL'leri Aç** `https://naim.nextusservis.com/plan/`.
+3. **Eğer Sonu.**
+
+Instagram her açıldığında sorar; odak yoksa hiçbir şey olmaz. Ana ekrandaki uygulama da Safari de
+sayacı sunucudaki odaktan geri getirir.
+
 ### Telegram hatırlatması
 
 `TELEGRAM_BOT_TOKEN` ve `TELEGRAM_CHAT_ID` varsa sunucu her gün iki kısa mesaj atar
@@ -164,6 +197,7 @@ Domains `https://naim.nextusservis.com`. Plan için **Storages → Volume Mount 
 | `KAFA_ANAHTAR` | "Kafama at" için | En az 24 karakter; yalnız `/api/plan/kafa` (ekler, okuyamaz). Yoksa uç kapalı |
 | `TELEGRAM_BOT_TOKEN` · `TELEGRAM_CHAT_ID` | hatırlatma için | İkisi de yoksa hatırlatma kapalı |
 | `HATIRLAT_SABAH` · `HATIRLAT_AKSAM` | hayır | Varsayılan `08:30` · `21:00` (İstanbul) |
+| `PLAN_TAKVIM` | hayır | `kapali` yazılırsa saatli plan işleri Google Takvim'e yazılmaz |
 | `KART_ADRESI` | hayır | Randevu linkinin kökü; varsayılan `https://naim.nextusservis.com/` |
 
 Google bulut projesinde OAuth onay ekranı **yayında (In production)** olmalı; "Testing"

@@ -18,6 +18,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { planAyristir, gorevSatiri, gecerliGun, anahtar } from './plan-ayristir.mjs';
 import { istanbulParcalari } from './takvim.mjs';
+import { aynala, aynaAcikMi } from './plan-takvim.mjs';
 
 const BURASI = path.dirname(fileURLToPath(import.meta.url));
 
@@ -52,6 +53,10 @@ let toplamDeneme = [];
 
 /** Testler için: bellekteki durumu ve deneme sayaçlarını sıfırlar (yeniden başlatmayı taklit eder). */
 export function planBelleginiSifirla() {
+  clearTimeout(aynaZaman);
+  aynaZaman = null;
+  aynaSuruyor = false;
+  aynaTekrar = false;
   bellek = null;
   zincir = Promise.resolve();
   denemeKayit = new Map();
@@ -66,9 +71,14 @@ function veriKlasoru() {
 function bosDurum() {
   return {
     surum: 1, guncellendi: null, haftalar: [], gorevler: [], silinenler: [],
-    seanslar: [], kapanislar: [], ayarlar: { haftalikDerinHedef: 20 }
+    seanslar: [], kapanislar: [], ayarlar: { haftalikDerinHedef: 20 },
+    takvimAyna: {},     // görev kimliği → { e: Google etkinliği, i: imza } (plan-takvim.mjs)
+    odak: null          // { bas, bitis, baslik } — süren derin odak (Instagram kestirmesi sorar)
   };
 }
+
+const ODAK_EN_UZUN = 5 * 3600e3;                // unutulan odak en geç 5 saatte düşer
+const ETKINLIK_ID = /^[A-Za-z0-9_-]{1,1024}$/;
 
 const SEANS_ID = /^s-[0-9a-f]{10}$/;
 const SAAT = /^([01]\d|2[0-3]):[0-5]\d$|^24:00$/;
@@ -106,7 +116,22 @@ function gecerliDurum(v) {
   d.kapanislar = Array.isArray(v.kapanislar) ? v.kapanislar.filter(gecerliGun).slice(-1000) : [];
   const hedef = v.ayarlar && Number(v.ayarlar.haftalikDerinHedef);
   d.ayarlar = { haftalikDerinHedef: Number.isFinite(hedef) && hedef >= 0 && hedef <= 80 ? hedef : 20 };
+  if (v.takvimAyna && typeof v.takvimAyna === 'object') {
+    for (const [id, k] of Object.entries(v.takvimAyna)) {
+      if (GOREV_ID.test(id) && k && typeof k.e === 'string' && ETKINLIK_ID.test(k.e) && typeof k.i === 'string') {
+        d.takvimAyna[id] = { e: k.e, i: k.i };
+      }
+    }
+  }
+  if (v.odak && typeof v.odak.bitis === 'string' && !Number.isNaN(Date.parse(v.odak.bitis))) {
+    d.odak = { bas: String(v.odak.bas || ''), bitis: v.odak.bitis, baslik: String(v.odak.baslik || '').slice(0, 300) };
+  }
   return d;
+}
+
+/** Odak sürüyor mu? Süresi geçmiş kayıt "sürmüyor" sayılır. */
+function odakSuruyor(d, simdi = Date.now()) {
+  return Boolean(d.odak && Date.parse(d.odak.bitis) > simdi);
 }
 
 /** Klasör ayrı bir dosya sisteminde mi? Coolify birimi bağlıysa evet; değilse veri her dağıtımda gider. */
@@ -292,6 +317,54 @@ function yanlisKaydet(ip) {
   toplamDeneme.push(simdi);
 }
 
+/* ======================= takvim aynası ======================= */
+
+let aynaZaman = null;
+let aynaSuruyor = false;
+let aynaTekrar = false;
+
+/** Plan değişti: kısa bir beklemeyle takvimi güncelle (art arda değişiklikler tek tura iner). */
+function aynaTetikle() {
+  if (!aynaAcikMi()) return;
+  clearTimeout(aynaZaman);
+  aynaZaman = setTimeout(() => { planAynasiniCalistir().catch(() => {}); }, 1500);
+  aynaZaman.unref?.();
+}
+
+/** Planın saatli işlerini Google Takvim'e yansıtır. Testler doğrudan çağırır. */
+export async function planAynasiniCalistir(simdi = new Date()) {
+  if (!aynaAcikMi()) return null;
+  if (aynaSuruyor) { aynaTekrar = true; return null; }
+  aynaSuruyor = true;
+  try {
+    await zincir;
+    const b = yukle();
+    const { kayit, sayilar } = await aynala(b.durum.gorevler, b.durum.takvimAyna || {}, simdi);
+    const degisti = JSON.stringify(kayit) !== JSON.stringify(b.durum.takvimAyna || {});
+    if (degisti) {
+      // Bu arada silinen/eklenen görev olabilir: yalnız kaydı birleştir, görevlere dokunma.
+      await degistir((d) => { d.takvimAyna = kayit; });
+    }
+    if (sayilar.hata) console.error('[plan] takvim aynası:', sayilar.hata, 'adım sonraki tura kaldı');
+    return sayilar;
+  } catch (h) {
+    console.error('[plan] takvim aynası:', String((h && h.message) || h).slice(0, 160));
+    return null;
+  } finally {
+    aynaSuruyor = false;
+    if (aynaTekrar) { aynaTekrar = false; aynaTetikle(); }
+  }
+}
+
+/** Sunucu açılınca: hemen bir tur, sonra 15 dakikada bir (kaçan adımlar için). */
+export function planAynasiBaslat() {
+  if (!aynaAcikMi()) return null;
+  setTimeout(() => { planAynasiniCalistir().catch(() => {}); }, 8_000).unref();
+  const t = setInterval(() => { planAynasiniCalistir().catch(() => {}); }, 15 * 60e3);
+  t.unref();
+  return t;
+}
+
 /** Bir günün görevleri (kopya) — Telegram hatırlatması okur, yazmaz. */
 export async function planGorevleri(gun) {
   await zincir;
@@ -402,6 +475,10 @@ function islemUygula(d, v) {
       }
       if (v.bas !== undefined || v.bit !== undefined) Object.assign(g, saatAraligi(v.bas ?? null, v.bit ?? null));
       if (v.ust !== undefined) g.ust = v.ust === true;      // "Bugünün 3'ü"
+      if (v.kadran !== undefined) {                          // önem/aciliyet: 1 acil+önemli · 2 önemli · 3 acil · 4 ikisi de değil
+        if (v.kadran !== null && ![1, 2, 3, 4].includes(v.kadran)) throw new PlanHatasi(400, 'kadran');
+        g.kadran = v.kadran;
+      }
       g.duzenlendi = true;               // sonraki plan yüklemesi elle düzeltmeyi ezmez
       return { gorev: g };
     }
@@ -424,6 +501,20 @@ function islemUygula(d, v) {
       const gun = gunDogrula(v.gun);
       if (!d.kapanislar.includes(gun)) d.kapanislar.push(gun);
       return { gun };
+    }
+    case 'odak': {
+      // Derin odak başladı/bitti. Instagram kestirmesi /api/plan/odak ile bunu sorar.
+      if (v.bitis === null) { d.odak = null; return { odak: null }; }
+      const bitis = Date.parse(v.bitis);
+      if (typeof v.bitis !== 'string' || Number.isNaN(bitis)) throw new PlanHatasi(400, 'bitis');
+      const simdiMs = Date.now();
+      if (bitis <= simdiMs) { d.odak = null; return { odak: null }; }
+      d.odak = {
+        bas: new Date(simdiMs).toISOString(),
+        bitis: new Date(Math.min(bitis, simdiMs + ODAK_EN_UZUN)).toISOString(),
+        baslik: metin(v.baslik ?? '', 'baslik', 300).trim()
+      };
+      return { odak: d.odak };
     }
     case 'hedef': {
       if (!Number.isInteger(v.saat) || v.saat < 0 || v.saat > 80) throw new PlanHatasi(400, 'saat');
@@ -541,8 +632,20 @@ export async function planIstegi(ctx) {
           kalici: b.kalici, uyari: b.uyari, guncellendi: b.durum.guncellendi,
           haftalar: b.durum.haftalar, gorevler: b.durum.gorevler,
           seanslar: b.durum.seanslar.slice(-1500),
-          kapanislar: b.durum.kapanislar, ayarlar: b.durum.ayarlar
+          kapanislar: b.durum.kapanislar, ayarlar: b.durum.ayarlar,
+          odak: odakSuruyor(b.durum) ? b.durum.odak : null,
+          takvimAyna: aynaAcikMi()
         });
+      }
+      case '/api/plan/odak': {
+        // iPhone otomasyonu "Instagram açıldığında" bunu sorar: düz metin "evet" / "hayir".
+        if (ctx.yontem !== 'GET') return cevap(405, { sebep: 'yontem' });
+        if (!kafaYetkili(ctx) && !yetkili(ctx)) {
+          return cevap(kafaAnahtari() ? 401 : 503, { sebep: kafaAnahtari() ? 'anahtar' : 'kapali' });
+        }
+        await zincir;
+        const odakta = odakSuruyor(yukle().durum);
+        return { durum: 200, basliklar: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }, govde: odakta ? 'evet' : 'hayir' };
       }
       case '/api/plan/giris': {
         if (ctx.yontem !== 'POST') return cevap(405, { sebep: 'yontem' });
@@ -565,6 +668,7 @@ export async function planIstegi(ctx) {
         if (!yetkili(ctx)) return cevap(401, { sebep: 'oturum' });
         const v = jsonGovde(ctx);
         const sonuc = await degistir((d) => islemUygula(d, v));
+        aynaTetikle();
         return cevap(200, { tamam: true, ...sonuc });
       }
       case '/api/plan/kafa': {
@@ -603,6 +707,7 @@ export async function planIstegi(ctx) {
         const p = planAyristir(v.metin);
         if (!p.gunler.length) return cevap(422, { sebep: 'bos', uyarilar: p.uyarilar });
         const ozet = await degistir((d) => birlestir(d, p));
+        aynaTetikle();
         return cevap(200, { tamam: true, ozet, uyarilar: p.uyarilar });
       }
       default:
