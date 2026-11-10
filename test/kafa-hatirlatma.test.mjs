@@ -144,6 +144,16 @@ test('kafa: dakikada en çok 20 ekleme', async () => {
   assert.equal((await istek('/api/plan/kafa', { yontem: 'POST', anahtar: KAFA, govde: { metin: 'fazla' } })).durum, 429);
 });
 
+test('kestirme kurulumu: anahtarı yalnız plan sahibi görür', async () => {
+  const r = await istek('/api/plan/kestirme', { anahtar: PLAN_ANAHTAR });
+  assert.equal(r.durum, 200);
+  assert.equal(r.v.anahtar, KAFA);
+  assert.equal((await istek('/api/plan/kestirme', { anahtar: KAFA })).durum, 401);
+  assert.equal((await istek('/api/plan/kestirme')).durum, 401);
+  delete process.env.KAFA_ANAHTAR;
+  assert.equal((await istek('/api/plan/kestirme', { anahtar: PLAN_ANAHTAR })).v.anahtar, null);
+});
+
 /* ======================= Telegram hatırlatması ======================= */
 
 async function ucuKur(gun, basliklar, { saatli } = {}) {

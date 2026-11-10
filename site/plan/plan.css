@@ -427,3 +427,8 @@ dialog.sayfa::backdrop { background: rgba(0, 0, 0, .32); animation: sol .25s eas
 .kadran-3 b { color: var(--crm); }
 .kadran-4 b { color: var(--metin-2); }
 @media (prefers-reduced-motion: reduce) { .kadran { transition: none; } }
+
+/* ---------- kestirme kurulum adımları ---------- */
+.adimlar { margin: 10px 4px 4px; padding-left: 22px; color: var(--metin-2); font-size: 15px; line-height: 1.45; }
+.adimlar li { margin-bottom: 6px; }
+.adimlar li::marker { color: var(--vurgu); font-weight: 700; }

@@ -637,6 +637,13 @@ export async function planIstegi(ctx) {
           takvimAyna: aynaAcikMi()
         });
       }
+      case '/api/plan/kestirme': {
+        // Kestirme kurulum sayfası (menü → iPhone kestirmeleri): giriş yapmış sahibine anahtarı verir ki
+        // telefonda kopyala-yapıştırla kursun. Kestirme anahtarının kendisi bunu OKUYAMAZ.
+        if (ctx.yontem !== 'GET') return cevap(405, { sebep: 'yontem' });
+        if (!yetkili(ctx)) return cevap(401, { sebep: 'oturum' });
+        return cevap(200, { anahtar: kafaAnahtari() });
+      }
       case '/api/plan/odak': {
         // iPhone otomasyonu "Instagram açıldığında" bunu sorar: düz metin "evet" / "hayir".
         if (ctx.yontem !== 'GET') return cevap(405, { sebep: 'yontem' });

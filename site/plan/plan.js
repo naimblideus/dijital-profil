@@ -1152,9 +1152,51 @@
       bag('Toplantılar', '/toplanti/', 'takvim'),
       crm ? bag('Nexus CRM', crm + '/merkez/benim', 'işlerim') : null,
       bag('Dijital kart', '/', 'randevu linki'),
+      secenek('iPhone kestirmeleri', kestirmeSayfasi, 'sesle ekle · Instagram engeli'),
       secenek('Haftalık derin hedef', hedefSayfasi, `${D.ayarlar.haftalikDerinHedef} sa`),
       secenek('Yedeği indir', () => { sayfaKapat(); yedekIndir(); }, 'JSON'),
       secenek('Çıkış yap', async () => { sayfaKapat(); await silmeyiGonder(); await istek('/cikis', {}); girisGoster('Çıkış yapıldı.'); }, null, 'tehlike'),
+      secenek('Kapat', sayfaKapat, null, 'sade'));
+  }
+
+  /** iPhone Kestirmeler kurulumu: adres ve anahtar tek dokunuşla kopyalanır, adımlar altında. */
+  async function kestirmeSayfasi() {
+    sayfaKapat();
+    const r = await istek('/kestirme');
+    if (!r.ok) return hataBildir(r);
+    if (!r.v.anahtar) {
+      return sayfaAc(el('p', { class: 'sayfa-baslik', text: 'iPhone kestirmeleri' }),
+        el('p', { class: 'sayfa-soru', text: 'Sunucuda KAFA_ANAHTAR tanımlı değil.' }), secenek('Kapat', sayfaKapat, null, 'sade'));
+    }
+    const kok = location.origin;
+    const kopya = (ad, deger) => secenek(ad, async () => {
+      try { await navigator.clipboard.writeText(deger); bildir('Kopyalandı'); }
+      catch { prompt('Kopyala:', deger); }
+    }, 'Kopyala');
+    const adimlar = (...m) => el('ol', { class: 'adimlar' }, m.map((x) => el('li', { text: x })));
+    sayfaAc(
+      el('p', { class: 'sayfa-baslik', text: 'iPhone kestirmeleri' }),
+      el('p', { class: 'sayfa-soru', text: 'Kestirmeler uygulamasında bir kez kur. Kopyala, oraya yapıştır.' }),
+
+      el('p', { class: 'ara-baslik', text: '1 · Kafama at (sesle iş ekle)' }),
+      kopya('Adres', kok + '/api/plan/kafa'),
+      kopya('Anahtar', 'Bearer ' + r.v.anahtar),
+      adimlar(
+        'Kestirmeler → + → “Metni Dikte Et” ekle.',
+        '“URL’nin İçeriğini Al” ekle → adresi yapıştır → Yöntem: POST.',
+        'Başlıklar → yeni başlık: Anahtar “Authorization”, Değer: kopyaladığın anahtar.',
+        'İstek Gövdesi: JSON → yeni alan “metin” → değer: Dikte Edilen Metin.',
+        'Adını “Kafama at” yap → Ana Ekrana Ekle.'),
+
+      el('p', { class: 'ara-baslik', text: '2 · Odakta Instagram engeli' }),
+      kopya('Adres', kok + '/api/plan/odak'),
+      kopya('Anahtar', 'Bearer ' + r.v.anahtar),
+      kopya('Plan adresi', kok + '/plan/'),
+      adimlar(
+        'Kestirmeler → Otomasyon → + → Uygulama → Instagram → Açıldığında → Hemen Çalıştır.',
+        '“URL’nin İçeriğini Al” ekle → adresi yapıştır → Başlıklar: “Authorization” = anahtar.',
+        '“Eğer” ekle → URL’nin İçeriği · şudur · evet',
+        'Eğer’in içine “URL’leri Aç” ekle → plan adresini yapıştır. Bitti.'),
       secenek('Kapat', sayfaKapat, null, 'sade'));
   }
 
