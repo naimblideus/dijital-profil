@@ -6,6 +6,10 @@
      HATIRLAT_SABAH      varsayılan 08:30 (İstanbul)
      HATIRLAT_AKSAM      varsayılan 21:00 (İstanbul)
      KART_ADRESI         "Planı aç" düğmesinin kökü (varsayılan https://naim.nextusservis.com)
+     HATIRLAT_TOPLANTI   toplantıdan kaç dakika önce haber verilsin (varsayılan 15; 0 = kapalı)
+
+   Toplantılar: takvimdeki kişili her toplantı (kart randevuları dahil) başlamadan önce bir kez
+   hatırlatılır ve sabah mesajında "Bugünkü görüşmeler" olarak listelenir.
 
    Kurallar:
    - Her mesaj günde EN ÇOK BİR KEZ. Gönderim kaydı plan klasöründe (hatirlatma.json) durur,
@@ -21,6 +25,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { istanbulParcalari } from './takvim.mjs';
 import { planGorevleri } from './plan.mjs';
+import { yaklasanToplantilar } from './toplanti.mjs';
 
 const BURASI = path.dirname(fileURLToPath(import.meta.url));
 const PENCERE_DK = 90;
@@ -33,9 +38,10 @@ const TURLER = {
 let kayitBellek = null;            // { sabah: 'YYYY-AA-GG', aksam: 'YYYY-AA-GG' }
 let calisiyor = false;
 let hataGunu = {};                 // aynı hatayı her dakika günlüğe yazmamak için
+let toplantiBellek = { zaman: 0, liste: [] };   // takvim her dakika sorulmaz: 5 dakikada bir
 
 /** Testler için: yeniden başlatmayı taklit eder (bellek boşalır, disk kaydı kalır). */
-export function hatirlaticiSifirla() { kayitBellek = null; calisiyor = false; hataGunu = {}; }
+export function hatirlaticiSifirla() { kayitBellek = null; calisiyor = false; hataGunu = {}; toplantiBellek = { zaman: 0, liste: [] }; }
 
 function botAnahtari() {
   const t = String(process.env.TELEGRAM_BOT_TOKEN || '').trim();
@@ -76,9 +82,12 @@ function kayitOku() {
   if (kayitBellek) return kayitBellek;
   try {
     const v = JSON.parse(fs.readFileSync(kayitDosyasi(), 'utf8'));
-    kayitBellek = { sabah: typeof v.sabah === 'string' ? v.sabah : null, aksam: typeof v.aksam === 'string' ? v.aksam : null };
+    kayitBellek = {
+      sabah: typeof v.sabah === 'string' ? v.sabah : null, aksam: typeof v.aksam === 'string' ? v.aksam : null,
+      toplanti: Array.isArray(v.toplanti) ? v.toplanti.filter((x) => typeof x === 'string').slice(-200) : []
+    };
   } catch {
-    kayitBellek = { sabah: null, aksam: null };
+    kayitBellek = { sabah: null, aksam: null, toplanti: [] };
   }
   return kayitBellek;
 }
@@ -101,8 +110,38 @@ function siraIle(a, b) {
 }
 const ucu = (gorevler) => gorevler.filter((g) => g.ust).sort(siraIle).slice(0, 3);
 
+function saatYaz(iso) {
+  const p = istanbulParcalari(new Date(iso));
+  return `${String(p.saat).padStart(2, '0')}:${String(p.dakika).padStart(2, '0')}`;
+}
+function toplantiAdi(t) {
+  const k = t.kisi || {};
+  const ad = [k.ad, k.firma ? `(${k.firma})` : null].filter(Boolean).join(' ');
+  return ad || t.baslik || 'Toplantı';
+}
+const SEKIL = { meet: 'Google Meet', telefon: 'Telefon', yuzyuze: 'Yüz yüze' };
+
+/** Toplantı başlamadan önce giden kısa mesaj. */
+export function toplantiMetni(t, dk) {
+  const satirlar = [`${dk <= 1 ? 'Şimdi' : dk + ' dk sonra'}: ${toplantiAdi(t)}`, `${saatYaz(t.bas)}–${saatYaz(t.bit)}${SEKIL[t.sekil] ? ' · ' + SEKIL[t.sekil] : ''}`];
+  if (t.sekil === 'telefon' && t.kisi && t.kisi.telefon) satirlar.push('Ara: ' + t.kisi.telefon);
+  if (t.sekil === 'yuzyuze' && t.yer) satirlar.push(t.yer);
+  return satirlar.join('\n');
+}
+
+async function toplantilariAl(simdi) {
+  if (simdi.getTime() - toplantiBellek.zaman < 5 * 60e3) return toplantiBellek.liste;
+  try {
+    toplantiBellek = { zaman: simdi.getTime(), liste: await yaklasanToplantilar() };
+  } catch (h) {
+    toplantiBellek = { zaman: simdi.getTime(), liste: toplantiBellek.liste };
+    if (hataGunu.takvim !== 1) { hataGunu.takvim = 1; console.error('[hatirlatma] takvim okunamadı'); }
+  }
+  return toplantiBellek.liste;
+}
+
 /** Sabah: bugünün 3'ü, ilk saat bloğu, kafada bekleyen iş sayısı. */
-export function sabahMetni(bugun) {
+export function sabahMetni(bugun, toplantilar = []) {
   const satirlar = [];
   const uc = ucu(bugun);
   if (uc.length) {
@@ -115,6 +154,10 @@ export function sabahMetni(bugun) {
   if (ilk) satirlar.push('', `İlk blok: ${ilk.bas}–${ilk.bit} ${ilk.baslik}`);
   const kafada = bugun.filter((g) => !g.bitti && !g.bas && !g.ust).length;
   if (kafada) satirlar.push(`Kafanda ${kafada} iş bekliyor.`);
+  if (toplantilar.length) {
+    satirlar.push('', 'Bugünkü görüşmeler:');
+    toplantilar.forEach((t) => satirlar.push(`• ${saatYaz(t.bas)} ${toplantiAdi(t)}`));
+  }
   return satirlar.join('\n');
 }
 
@@ -138,7 +181,7 @@ export function aksamMetni(bugun, yarin) {
 
 /* ---------- gönderim ---------- */
 
-async function gonder(metin) {
+async function gonder(metin, dugme) {
   const y = await fetch(`${telegramKoku()}/bot${botAnahtari()}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -146,7 +189,7 @@ async function gonder(metin) {
       chat_id: sohbetKimligi(),
       text: metin,
       disable_web_page_preview: true,
-      reply_markup: { inline_keyboard: [[{ text: 'Planı aç', url: planAdresi() }]] }
+      reply_markup: { inline_keyboard: [[dugme || { text: 'Planı aç', url: planAdresi() }]] }
     }),
     signal: AbortSignal.timeout(10_000)
   });
@@ -173,7 +216,10 @@ export async function hatirlatKontrol(simdi = new Date()) {
       if (kayit[tur] === gun) continue;
       try {
         const bugun = await planGorevleri(gun);
-        const metin = tur === 'sabah' ? sabahMetni(bugun) : aksamMetni(bugun, await planGorevleri(ertesiGun(gun)));
+        const gunun = tur === 'sabah'
+          ? (await toplantilariAl(simdi)).filter((t) => gunMetni(istanbulParcalari(new Date(t.bas))) === gun && t.durum !== 'gorusuldu')
+          : [];
+        const metin = tur === 'sabah' ? sabahMetni(bugun, gunun) : aksamMetni(bugun, await planGorevleri(ertesiGun(gun)));
         await gonder(metin);
         await kayitYaz({ ...kayit, [tur]: gun });
         giden.push(tur);
@@ -181,6 +227,25 @@ export async function hatirlatKontrol(simdi = new Date()) {
         if (hataGunu[tur] !== gun) {
           hataGunu[tur] = gun;
           console.error('[hatirlatma]', tur, String((h && h.message) || h).slice(0, 120));
+        }
+      }
+    }
+    // Toplantı hatırlatması: başlamasına N dakika kala, her toplantı için bir kez.
+    const once = Number.isFinite(Number(process.env.HATIRLAT_TOPLANTI)) && process.env.HATIRLAT_TOPLANTI !== ''
+      ? Number(process.env.HATIRLAT_TOPLANTI) : 15;
+    if (once > 0) {
+      for (const t of await toplantilariAl(simdi)) {
+        const kalan = (Date.parse(t.bas) - simdi.getTime()) / 60e3;
+        if (kalan > once || kalan < -2 || t.durum === 'gorusuldu') continue;
+        const anahtar = t.id + '@' + t.bas;                // ertelenirse yeni saat için yeniden hatırlatır
+        const kayit = kayitOku();
+        if ((kayit.toplanti || []).includes(anahtar)) continue;
+        try {
+          await gonder(toplantiMetni(t, Math.max(0, Math.round(kalan))), t.meet ? { text: 'Meet’e katıl', url: t.meet } : null);
+          await kayitYaz({ ...kayit, toplanti: [...(kayit.toplanti || []), anahtar].slice(-200) });
+          giden.push('toplanti');
+        } catch (h) {
+          if (hataGunu.toplanti !== gun) { hataGunu.toplanti = gun; console.error('[hatirlatma] toplanti', String((h && h.message) || h).slice(0, 120)); }
         }
       }
     }

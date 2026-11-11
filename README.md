@@ -44,6 +44,20 @@ Sonra kestirmeyi **Ana Ekrana Ekle**; "Hey Siri, kafama at" de çalışır. Ayn�
 menüsünden ya da Apple Watch'tan da metin gönderilebilir. Anahtar `KAFA_ANAHTAR` (en az 24 karakter);
 kestirmeyi kimseyle paylaşma.
 
+### Sesle eklenen işi Claude sınıflandırır
+
+`ANTHROPIC_API_KEY` varsa `/api/plan/kafa` cümleyi Claude'a gönderir (yanında bugünün tarihi ve
+Bugünün 3'ü): tek cümledeki birden çok iş ayrılır, başlık düzeltilir, söylenen gün ve saat işe
+yazılır, önem/aciliyet **önerilir**. Öneri karar değildir: iş "Öneri: …" rozetiyle gelir,
+Kafamdakiler'de **Önerileri gör** ile tek tek ya da "hepsini onayla" ile onaylanır (silme önerisi
+toplu onaylanmaz). API hata verirse cümle olduğu gibi eklenir.
+
+### Görüşmeler
+
+Takvimdeki kişili her toplantı (kart randevuları dahil) planda **Görüşmeler** bölümünde ve Saatler'de
+görünür, sabah mesajında listelenir, başlamadan 15 dakika önce Telegram'dan hatırlatılır (Meet
+linki düğmede). Ertelenirse yeni saat için yeniden hatırlatır.
+
 ### Önem / aciliyet matrisi
 
 Kafamdakiler'de sınıflanmamış iş varsa başlıkta **Sınıflandır · N** çıkar. Dokununca işler tek tek
@@ -197,6 +211,8 @@ Domains `https://naim.nextusservis.com`. Plan için **Storages → Volume Mount 
 | `KAFA_ANAHTAR` | "Kafama at" için | En az 24 karakter; yalnız `/api/plan/kafa` (ekler, okuyamaz). Yoksa uç kapalı |
 | `TELEGRAM_BOT_TOKEN` · `TELEGRAM_CHAT_ID` | hatırlatma için | İkisi de yoksa hatırlatma kapalı |
 | `HATIRLAT_SABAH` · `HATIRLAT_AKSAM` | hayır | Varsayılan `08:30` · `21:00` (İstanbul) |
+| `ANTHROPIC_API_KEY` | yapay zekâ için | Varsa "Kafama at" cümlesini Claude işlere ayırır, önem/aciliyet önerir, söylenen gün ve saati çıkarır. Yoksa cümle olduğu gibi eklenir. Model: `AKIL_MODEL` (varsayılan `claude-opus-5-5`) |
+| `HATIRLAT_TOPLANTI` | hayır | Toplantıdan kaç dakika önce Telegram'dan haber verilsin; varsayılan `15`, `0` kapatır |
 | `PLAN_TAKVIM` | hayır | `kapali` yazılırsa saatli plan işleri Google Takvim'e yazılmaz |
 | `KART_ADRESI` | hayır | Randevu linkinin kökü; varsayılan `https://naim.nextusservis.com/` |
 

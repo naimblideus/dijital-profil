@@ -230,6 +230,12 @@ async function liste() {
   return { ...temel, toplantilar };
 }
 
+/** Önümüzdeki toplantılar (kart randevuları dahil) — Telegram hatırlatması okur. Takvim yoksa boş. */
+export async function yaklasanToplantilar() {
+  const v = await liste();
+  return v.toplantilar || [];
+}
+
 async function slotlar() {
   if (!kimlikVarMi()) throw new ToplantiHatasi(503, 'kimlik-yok');
   // Kartın ziyaretçi kuralı (en erken 4 saat sonrası) sahibine uygulanmaz: bir saat sonrasına da kurabilir.

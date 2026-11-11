@@ -432,3 +432,11 @@ dialog.sayfa::backdrop { background: rgba(0, 0, 0, .32); animation: sol .25s eas
 .adimlar { margin: 10px 4px 4px; padding-left: 22px; color: var(--metin-2); font-size: 15px; line-height: 1.45; }
 .adimlar li { margin-bottom: 6px; }
 .adimlar li::marker { color: var(--vurgu); font-weight: 700; }
+
+/* ---------- yapay zekâ önerisi + görüşmeler ---------- */
+.kadran.onerilen { box-shadow: inset 0 0 0 2px currentColor; }
+.kadran-1.onerilen { color: var(--kirmizi); } .kadran-2.onerilen { color: var(--vurgu); }
+.kadran-3.onerilen { color: var(--crm); } .kadran-4.onerilen { color: var(--metin-2); }
+.kadran.onerilen span { color: var(--metin-2); }
+.gorusme-satir { width: 100%; text-align: left; }
+.gorusme-saat { flex: none; min-width: 52px; font-family: var(--rakam); font-weight: 700; color: var(--toplanti); font-variant-numeric: tabular-nums; }

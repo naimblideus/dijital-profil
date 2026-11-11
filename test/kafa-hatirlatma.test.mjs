@@ -96,7 +96,7 @@ test('kafa: doğru anahtarla bugüne saatsiz iş düşer', async () => {
   const r = await istek('/api/plan/kafa', { yontem: 'POST', anahtar: KAFA, govde: { metin: '  Ahmet Bey\'e\n teklif   gönder ' } });
   assert.equal(r.durum, 200);
   assert.equal(r.v.baslik, "Ahmet Bey'e teklif gönder");
-  assert.deepEqual(Object.keys(r.v).sort(), ['baslik', 'tamam']);   // planla ilgili başka hiçbir şey dönmez
+  assert.deepEqual(Object.keys(r.v).sort(), ['adet', 'baslik', 'tamam']);   // planla ilgili başka hiçbir şey dönmez
   const p = await planOku();
   const g = p.v.gorevler.find((x) => x.kaynak === 'kafa');
   assert.ok(g);

@@ -331,6 +331,14 @@
     }
 
     p.push(ustBolumu(secili));
+    const gorusmeler = gunToplantilari(secili);
+    if (gorusmeler.length) {
+      p.push(bolum('Görüşmeler', el('small', { text: `${gorusmeler.length} görüşme` }),
+        el('div', { class: 'grup' }, gorusmeler.map((x) => el('button', { class: 'satir gorusme-satir', type: 'button', onclick: () => toplantiSayfasi(x.t, x.b, x.e) },
+          el('span', { class: 'gorusme-saat', text: saatDk(x.b) }),
+          el('span', { class: 'metin' }, el('span', { class: 'baslik', text: toplantiAdi(x.t).replace(/^Toplantı · /, '') }),
+            el('span', { class: 'alt' }, el('span', { text: `${saatDk(x.b)}–${saatDk(x.e)}` }), x.t.meet ? el('span', { text: 'Meet' }) : null)))))));
+    }
     p.push(saatBolumu(secili, liste));
     p.push(kafamBolumu(secili, liste));
 
@@ -470,6 +478,7 @@
     const acik = saatsiz.filter((g) => !g.bitti)
       .sort((a, b) => (KADRAN_SIRA[a.kadran] ?? 3) - (KADRAN_SIRA[b.kadran] ?? 3));
     const siniflanmamis = acik.filter((g) => !g.kadran && !g.gecici);
+    const onerili = siniflanmamis.filter((g) => g.oneri);
     const bitmis = saatsiz.filter((g) => g.bitti);
     const parca = [];
     if (saatsiz.length) {
@@ -495,7 +504,8 @@
         el('span', { class: 'metin' }, el('span', { class: 'baslik', text: 'Aklındakini aşağıya yaz.' })))));
     }
     const sag = siniflanmamis.length
-      ? el('button', { class: 'bolum-dugme', type: 'button', onclick: () => matrisSayfasi(siniflanmamis.map((g) => g.id)) }, `Sınıflandır · ${siniflanmamis.length}`)
+      ? el('button', { class: 'bolum-dugme', type: 'button', onclick: () => matrisSayfasi(siniflanmamis.map((g) => g.id)) },
+        onerili.length ? `Önerileri gör · ${siniflanmamis.length}` : `Sınıflandır · ${siniflanmamis.length}`)
       : acik.length ? el('small', { text: `${acik.length} açık` }) : null;
     return bolum('Kafamdakiler', sag, ...parca);
   }
@@ -524,6 +534,7 @@
     else if (g.dk) alt.append(el('span', { text: `${g.dk} dk` }));
     if (crmId) alt.append(el('span', { class: 'rozet oneri', text: 'CRM' }));
     if (g.kadran && !g.bitti && !g.ust && KADRAN[g.kadran].rozet) alt.append(el('span', { class: 'rozet kadran-' + g.kadran, text: KADRAN[g.kadran].rozet }));
+    else if (!g.kadran && g.oneri && !g.bitti && !g.ust) alt.append(el('span', { class: 'rozet oneri', text: 'Öneri: ' + KADRAN[g.oneri].kisa }));
     if (not && !acik) alt.append(el('span', { text: 'not' }));
 
     const metin = el('button', {
@@ -996,14 +1007,28 @@
         if (k === 2) return yerlestirSayfasi({ tur: 'gorev', g }, sonraki);
         return sonraki();
       };
-      const kutu = (k) => el('button', { class: 'kadran kadran-' + k, type: 'button', onclick: () => sec(k) },
-        el('b', { text: KADRAN[k].ad }), el('span', { text: KADRAN[k].alt }));
+      const kutu = (k) => el('button', { class: 'kadran kadran-' + k + (g.oneri === k ? ' onerilen' : ''), type: 'button', onclick: () => sec(k) },
+        el('b', { text: KADRAN[k].ad }), el('span', { text: g.oneri === k ? 'Öneri · ' + KADRAN[k].alt : KADRAN[k].alt }));
+      const bekleyenOneri = [g, ...kalan.map(bul)].filter((x) => x && x.oneri && !x.kadran && !x.bitti);
+      const hepsiniOnayla = async () => {
+        sayfaKapat();
+        let n = 0;
+        for (const x of bekleyenOneri) {
+          if (x.oneri === 4) continue;                   // silmeyi toplu yapma: tek tek karar ver
+          const k = x.oneri;
+          if (!(await duzenle(x, { kadran: k }))) break;
+          if (k === 1 && !x.ust && ustler(x.gun).length < 3) await ustYap(x, true);
+          n++;
+        }
+        bildir(`${n} öneri onaylandı`);
+      };
       sayfaAc(
         el('p', { class: 'sayfa-baslik', text: g.baslik }),
         el('p', { class: 'sayfa-soru', text: kalan.length ? `Bu iş ne? · ${kalan.length} iş daha` : 'Bu iş ne?' }),
         el('div', { class: 'matris' },
           el('div', { class: 'matris-eksen', 'aria-hidden': 'true' }, el('span', { text: 'Acil' }), el('span', { text: 'Acil değil' })),
           kutu(1), kutu(2), kutu(3), kutu(4)),
+        bekleyenOneri.length > 1 ? secenek(`Önerilerin hepsini onayla · ${bekleyenOneri.length}`, hepsiniOnayla) : null,
         secenek('Sonra bakarım', () => sonraki(), null, 'sade'),
         secenek('Bitir', sayfaKapat, null, 'sade'));
     };
