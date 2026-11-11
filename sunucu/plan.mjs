@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { planAyristir, gorevSatiri, gecerliGun, anahtar } from './plan-ayristir.mjs';
 import { istanbulParcalari } from './takvim.mjs';
 import { aynala, aynaAcikMi } from './plan-takvim.mjs';
-import { isleriCikar, akilAcikMi } from './akil.mjs';
+import { isleriTemizle } from './akil.mjs';
 
 const BURASI = path.dirname(fileURLToPath(import.meta.url));
 
@@ -696,33 +696,59 @@ export async function planIstegi(ctx) {
         if (!baslik) throw new PlanHatasi(400, 'metin');
         kafaIzleri.push(simdi);
         const bugun = istanbulBugun();
-        // Claude bağlıysa cümleyi işlere ayırır, önem/aciliyet önerir, söylenen gün ve saati çıkarır.
-        // Bağlı değilse ya da hata verirse cümle olduğu gibi tek iş olur: sesle ekleme kaybolmaz.
-        let isler = null;
-        if (akilAcikMi()) {
-          await zincir;
-          const GUNLER = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
-          const uclu = yukle().durum.gorevler.filter((g) => g.gun === bugun && g.ust && !g.bitti).map((g) => g.baslik).slice(0, 3);
-          isler = await isleriCikar(baslik, { bugun, gunAdi: GUNLER[new Date(bugun + 'T12:00:00Z').getUTCDay()], uclu });
-        }
-        const eklenecek = isler || [{ baslik, kadran: null, gun: null, bas: null, bit: null, toplanti: false }];
+        // Cümle olduğu gibi eklenir ve sıraya girer; bilgisayardaki Claude sonra işlere ayırıp öneri yazar.
         await degistir((d) => {
-          const zaman = new Date().toISOString();
-          for (const i of eklenecek) {
-            const gun = i.gun && i.gun >= bugun ? i.gun : bugun;
-            const g = {
-              id: 'e-' + crypto.randomBytes(5).toString('hex'),
-              gun, gunIlk: gun, sira: sonSira(d, gun) + 1,
-              alan: null, baslik: i.baslik, dk: null, not: '',
-              bas: i.bas, bit: i.bit,
-              bitti: false, bittiZaman: null, kaynak: 'kafa', olusturuldu: zaman
-            };
-            if (i.kadran) g.oneri = i.kadran;          // öneri: kullanıcı onaylayınca kadran olur
-            d.gorevler.push(g);
-          }
+          d.gorevler.push({
+            id: 'e-' + crypto.randomBytes(5).toString('hex'),
+            gun: bugun, gunIlk: bugun, sira: sonSira(d, bugun) + 1,
+            alan: null, baslik, dk: null, not: '', bas: null, bit: null,
+            bitti: false, bittiZaman: null, kaynak: 'kafa', olusturuldu: new Date().toISOString(),
+            bekliyor: true, ham: baslik
+          });
         });
         aynaTetikle();
-        return cevap(200, { tamam: true, baslik: eklenecek.map((i) => i.baslik).join(' · '), adet: eklenecek.length });
+        return cevap(200, { tamam: true, baslik, adet: 1 });
+      }
+      case '/api/plan/kuyruk': {
+        // Bilgisayardaki Claude'un sırası. GET: bekleyen cümleler. POST: bir cümlenin sonucu.
+        if (!yetkili(ctx)) return cevap(401, { sebep: 'oturum' });
+        const bugun = istanbulBugun();
+        if (ctx.yontem === 'GET') {
+          await zincir;
+          const d = yukle().durum;
+          const GUNLER = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
+          return cevap(200, {
+            bugun, gunAdi: GUNLER[new Date(bugun + 'T12:00:00Z').getUTCDay()],
+            uclu: d.gorevler.filter((g) => g.gun === bugun && g.ust && !g.bitti).map((g) => g.baslik).slice(0, 3),
+            bekleyen: d.gorevler.filter((g) => g.bekliyor && !g.bitti).slice(0, 10).map((g) => ({ id: g.id, metin: g.ham || g.baslik }))
+          });
+        }
+        if (ctx.yontem !== 'POST') return cevap(405, { sebep: 'yontem' });
+        const v = jsonGovde(ctx);
+        if (typeof v.id !== 'string') throw new PlanHatasi(400, 'id');
+        const isler = isleriTemizle(v.isler);              // null = çözülemedi: cümle olduğu gibi kalır
+        const adet = await degistir((d) => {
+          const g = d.gorevler.find((x) => x.id === v.id);
+          if (!g || !g.bekliyor) return 0;
+          delete g.bekliyor;
+          const ham = g.ham; delete g.ham;
+          // Kullanıcı bu arada işi elle değiştirdiyse (başlık, kadran, saat, bitti) dokunma.
+          if (!isler || g.bitti || g.kadran || g.bas || g.baslik !== ham) return 0;
+          const zaman = new Date().toISOString();
+          isler.forEach((i, n) => {
+            const gun = i.gun && i.gun >= bugun ? i.gun : bugun;
+            const hedef = n === 0 ? g : {
+              id: 'e-' + crypto.randomBytes(5).toString('hex'),
+              alan: null, dk: null, not: '', bitti: false, bittiZaman: null, kaynak: 'kafa', olusturuldu: zaman
+            };
+            if (n > 0 || gun !== g.gun) { hedef.gun = gun; hedef.gunIlk = gun; hedef.sira = sonSira(d, gun) + 1; }
+            hedef.baslik = i.baslik; hedef.bas = i.bas; hedef.bit = i.bit; hedef.oneri = i.kadran;
+            if (n > 0) d.gorevler.push(hedef);
+          });
+          return isler.length;
+        });
+        aynaTetikle();
+        return cevap(200, { tamam: true, adet });
       }
       case '/api/plan/yukle': {
         if (ctx.yontem !== 'POST') return cevap(405, { sebep: 'yontem' });

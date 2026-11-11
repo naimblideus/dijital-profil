@@ -1,4 +1,4 @@
-/* Claude ile iş çıkarma ("Kafama at") + toplantı hatırlatması.
+/* "Kafama at" sırası (bilgisayardaki Claude) + toplantı hatırlatması.
    node --test test/akil-toplanti.test.mjs — sahte Claude, sahte Google, sahte Telegram; dışarıya hiçbir istek gitmez. */
 
 import { test, before, after, beforeEach } from 'node:test';
@@ -17,7 +17,6 @@ const PLAN_ANAHTAR = 'makine-anahtari-0123456789abcdef';
 const KAFA = 'kafa-anahtari-0123456789abcdefgh';
 
 let sunucu, adres, klasor, google, sahte, sahteAdres;
-let claudeIstekleri = [], claudeCevap = null, claudeDurum = 200;
 let tgMesajlar = [];
 
 function yerelSunucu(isleyici) {
@@ -34,13 +33,8 @@ function yerelSunucu(isleyici) {
 before(async () => {
   klasor = fs.mkdtempSync(path.join(os.tmpdir(), 'akil-test-'));
   google = await sahteGoogleBaslat();
-  // Tek sahte sunucu: /v1/messages = Claude, /bot…/sendMessage = Telegram
+  // Sahte Telegram
   sahte = await yerelSunucu((i, c, govde) => {
-    if (i.url === '/v1/messages') {
-      claudeIstekleri.push({ basliklar: i.headers, govde: JSON.parse(govde) });
-      c.writeHead(claudeDurum, { 'Content-Type': 'application/json' });
-      return c.end(JSON.stringify(claudeDurum === 200 ? claudeCevap : { error: { type: 'overloaded_error' } }));
-    }
     tgMesajlar.push(JSON.parse(govde));
     c.writeHead(200, { 'Content-Type': 'application/json' });
     c.end(JSON.stringify({ ok: true }));
@@ -62,26 +56,19 @@ beforeEach(() => {
   Object.assign(process.env, {
     PLAN_SIFRE: 'deneme-sifre-123', PLAN_ANAHTAR: PLAN_ANAHTAR, PLAN_VERI: klasor, KAFA_ANAHTAR: KAFA,
     PLAN_TAKVIM: 'kapali',
-    ANTHROPIC_API_KEY: 'sahte-anahtar-0123456789abcdef', ANTHROPIC_API_KOK: sahteAdres,
     TELEGRAM_BOT_TOKEN: '123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabc', TELEGRAM_CHAT_ID: '42', TELEGRAM_API: sahteAdres,
     GOOGLE_CLIENT_ID: 'sahte-id', GOOGLE_CLIENT_SECRET: 'sahte-gizli', GOOGLE_REFRESH_TOKEN: 'sahte-yenileme',
     GOOGLE_TOKEN_URL: google.kok + '/token', GOOGLE_API_KOK: google.kok
   });
   delete process.env.HATIRLAT_TOPLANTI;
-  delete process.env.AKIL_MODEL;
   for (const f of fs.readdirSync(klasor)) fs.rmSync(path.join(klasor, f), { recursive: true, force: true });
   planBelleginiSifirla();
   hatirlaticiSifirla();
   jetonBelleginiSil();
   google.durum.kayitlar.clear();
   google.durum.takvimHata = false;
-  claudeIstekleri = []; claudeDurum = 200; tgMesajlar = [];
-  claudeCevap = cevapKur([{ baslik: 'Kabim sunumunu bitir', kadran: 1, gun: null, bas: null, bit: null, toplanti: false }]);
+  tgMesajlar = [];
 });
-
-function cevapKur(isler, stop = 'end_turn') {
-  return { stop_reason: stop, content: [{ type: 'thinking', thinking: '' }, { type: 'text', text: JSON.stringify({ isler }) }] };
-}
 
 let ipSayac = 0;
 function istek(yol, { yontem = 'GET', anahtar = PLAN_ANAHTAR, govde } = {}) {
@@ -102,73 +89,75 @@ const kafa = (metin) => istek('/api/plan/kafa', { yontem: 'POST', anahtar: KAFA,
 const plan = async () => (await istek('/api/plan')).v.gorevler;
 const gunSonra = (n) => { const d = new Date(istanbulBugun() + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 
-/* ======================= Claude ile iş çıkarma ======================= */
+/* ======================= sıra: bilgisayardaki Claude ======================= */
 
-test('akıl: cümle birden çok işe ayrılır, öneri ve saat gelir, kadran onaysız kalır', async () => {
+const kuyruk = () => istek('/api/plan/kuyruk');
+const sonuc = (id, isler) => istek('/api/plan/kuyruk', { yontem: 'POST', govde: { id, isler } });
+
+test('sıra: cümle hemen eklenir, sıraya girer; sonuç gelince işlere ayrılır, kadran onaysız kalır', async () => {
   const yarin = gunSonra(1);
-  claudeCevap = cevapKur([
-    { baslik: 'Kabim sunumunu bitir', kadran: 1, gun: null, bas: null, bit: null, toplanti: false },
-    { baslik: 'Ahmet Bey ile görüşme', kadran: 2, gun: yarin, bas: '15:00', bit: '15:30', toplanti: true }
-  ]);
   const r = await kafa('kabim sunumunu bitir bir de yarın üçte ahmet beyle görüşme');
   assert.equal(r.durum, 200);
-  assert.equal(r.v.adet, 2);
+  assert.equal((await plan()).length, 1);                 // bilgisayar kapalı olsa da iş planda
+  const k = (await kuyruk()).v;
+  assert.equal(k.bugun, istanbulBugun());
+  assert.equal(k.bekleyen.length, 1);
+  assert.match(k.bekleyen[0].metin, /ahmet beyle görüşme/);
+
+  const y = await sonuc(k.bekleyen[0].id, [
+    { baslik: 'Kabim sunumunu bitir', kadran: 1, gun: null, bas: null, bit: null },
+    { baslik: 'Ahmet Bey ile görüşme', kadran: 2, gun: yarin, bas: '15:00', bit: '15:30' }
+  ]);
+  assert.equal(y.v.adet, 2);
   const g = await plan();
   const a = g.find((x) => x.baslik === 'Kabim sunumunu bitir');
   const b = g.find((x) => x.baslik === 'Ahmet Bey ile görüşme');
+  assert.equal(g.length, 2);
   assert.equal(a.oneri, 1);
   assert.equal(a.kadran, undefined);
   assert.equal(a.gun, istanbulBugun());
   assert.equal(b.gun, yarin);
   assert.equal(b.bas, '15:00');
-  assert.equal(b.bit, '15:30');
-
-  // istek biçimi: anahtar başlıkta, model ve yapılandırılmış çıktı gövdede, bugünün tarihi bağlamda
-  const i = claudeIstekleri[0];
-  assert.equal(i.basliklar['x-api-key'], 'sahte-anahtar-0123456789abcdef');
-  assert.equal(i.basliklar['anthropic-version'], '2026-10-21');
-  assert.equal(i.govde.model, 'claude-opus-5-5');
-  assert.equal(i.govde.output_config.format.type, 'json_schema');
-  assert.equal(i.govde.output_config.effort, 'low');
-  assert.equal(i.govde.thinking, undefined);
-  assert.match(i.govde.messages[0].content, new RegExp('Bugün: ' + istanbulBugun()));
-  assert.match(i.govde.messages[0].content, /ahmet beyle görüşme/);
+  assert.equal((await kuyruk()).v.bekleyen.length, 0);
+  assert.equal((await sonuc(k.bekleyen[0].id, [{ baslik: 'x', kadran: 1 }])).v.adet, 0);   // ikinci kez yazılmaz
 });
 
-test('akıl: onaylayınca öneri düşer', async () => {
+test('sıra: onaylayınca öneri düşer; kullanıcı elle karar verdiyse sonuç işi ezmez', async () => {
   await kafa('kabim sunumunu bitir');
-  const [g] = await plan();
+  let [g] = await plan();
+  await sonuc(g.id, [{ baslik: 'Kabim sunumunu bitir', kadran: 1, gun: null, bas: null, bit: null }]);
   const r = await istek('/api/plan/islem', { yontem: 'POST', govde: { islem: 'duzenle', id: g.id, kadran: 3 } });
   assert.equal(r.v.gorev.kadran, 3);
   assert.equal(r.v.gorev.oneri, undefined);
+
+  await kafa('ikinci iş');
+  g = (await plan()).find((x) => x.baslik === 'ikinci iş');
+  await istek('/api/plan/islem', { yontem: 'POST', govde: { islem: 'duzenle', id: g.id, kadran: 2 } });
+  assert.equal((await sonuc(g.id, [{ baslik: 'Başka başlık', kadran: 1 }])).v.adet, 0);
+  g = (await plan()).find((x) => x.id === g.id);
+  assert.equal(g.baslik, 'ikinci iş');
+  assert.equal(g.kadran, 2);
+  assert.equal((await kuyruk()).v.bekleyen.length, 0);
 });
 
-test('akıl: API hatası, ret ya da bozuk cevapta cümle olduğu gibi eklenir', async () => {
-  claudeDurum = 529;
-  assert.equal((await kafa('birinci iş')).durum, 200);
-  claudeDurum = 200;
-  claudeCevap = cevapKur([], 'refusal');
-  assert.equal((await kafa('ikinci iş')).durum, 200);
-  claudeCevap = { stop_reason: 'end_turn', content: [{ type: 'text', text: 'json değil' }] };
-  assert.equal((await kafa('üçüncü iş')).durum, 200);
-  const g = await plan();
-  assert.deepEqual(g.map((x) => x.baslik).sort(), ['birinci iş', 'ikinci iş', 'üçüncü iş']);
-  assert.ok(g.every((x) => x.oneri === undefined && x.bas === null));
-});
-
-test('akıl: geçersiz saat ve geçmiş gün temizlenir, anahtar yoksa Claude çağrılmaz', async () => {
-  claudeCevap = cevapKur([{ baslik: 'Rapor', kadran: 9, gun: '2020-01-01', bas: '25:00', bit: '26:00', toplanti: false }]);
+test('sıra: geçersiz saat ve geçmiş gün temizlenir, bozuk sonuçta cümle olduğu gibi kalır, anahtarsız kapalı', async () => {
   await kafa('rapor');
   let [g] = await plan();
+  await sonuc(g.id, [{ baslik: 'Rapor', kadran: 9, gun: '2020-01-01', bas: '25:00', bit: '26:00' }]);
+  [g] = await plan();
   assert.equal(g.gun, istanbulBugun());
   assert.equal(g.bas, null);
   assert.equal(g.oneri, 2);
 
-  delete process.env.ANTHROPIC_API_KEY;
-  claudeIstekleri = [];
-  await kafa('anahtarsız iş');
-  assert.equal(claudeIstekleri.length, 0);
-  assert.ok((await plan()).some((x) => x.baslik === 'anahtarsız iş'));
+  await kafa('bozuk iş');
+  g = (await plan()).find((x) => x.baslik === 'bozuk iş');
+  assert.equal((await sonuc(g.id, 'json değil')).v.adet, 0);
+  g = (await plan()).find((x) => x.id === g.id);
+  assert.equal(g.baslik, 'bozuk iş');
+  assert.equal(g.oneri, undefined);
+
+  assert.equal((await istek('/api/plan/kuyruk', { anahtar: KAFA })).durum, 401);   // kestirme anahtarı sırayı okuyamaz
+  assert.equal((await istek('/api/plan/kuyruk', { anahtar: 'yanlis' })).durum, 401);
 });
 
 /* ======================= toplantı hatırlatması ======================= */

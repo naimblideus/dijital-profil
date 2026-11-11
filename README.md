@@ -46,11 +46,14 @@ kestirmeyi kimseyle paylaşma.
 
 ### Sesle eklenen işi Claude sınıflandırır
 
-`ANTHROPIC_API_KEY` varsa `/api/plan/kafa` cümleyi Claude'a gönderir (yanında bugünün tarihi ve
-Bugünün 3'ü): tek cümledeki birden çok iş ayrılır, başlık düzeltilir, söylenen gün ve saat işe
-yazılır, önem/aciliyet **önerilir**. Öneri karar değildir: iş "Öneri: …" rozetiyle gelir,
-Kafamdakiler'de **Önerileri gör** ile tek tek ya da "hepsini onayla" ile onaylanır (silme önerisi
-toplu onaylanmaz). API hata verirse cümle olduğu gibi eklenir.
+API anahtarı yoktur. `/api/plan/kafa` cümleyi olduğu gibi ekler ve sıraya koyar. Kurucunun
+bilgisayarında çalışan `hat/plan-akil.mjs` 15 saniyede bir `/api/plan/kuyruk`a bakar (`PLAN_ANAHTAR`),
+cümleyi o bilgisayardaki Claude Code girişiyle işlere ayırır ve sonucu geri yazar: tek cümledeki
+birden çok iş ayrılır, başlık düzeltilir, söylenen gün ve saat işe yazılır, önem/aciliyet **önerilir**.
+Öneri karar değildir: iş "Öneri: …" rozetiyle gelir, Kafamdakiler'de **Önerileri gör** ile tek tek ya
+da "hepsini onayla" ile onaylanır (silme önerisi toplu onaylanmaz). Bilgisayar kapalıysa iş planda
+durur, açılınca sınıflanır. Görevi bir kez kur: `pwsh -File hat\plan-akil-gorev-kur.ps1`
+(elle deneme: `node hat/plan-akil.mjs --dene "yarın üçte Ahmet Bey'le görüşme"`).
 
 ### Görüşmeler
 
@@ -211,7 +214,6 @@ Domains `https://naim.nextusservis.com`. Plan için **Storages → Volume Mount 
 | `KAFA_ANAHTAR` | "Kafama at" için | En az 24 karakter; yalnız `/api/plan/kafa` (ekler, okuyamaz). Yoksa uç kapalı |
 | `TELEGRAM_BOT_TOKEN` · `TELEGRAM_CHAT_ID` | hatırlatma için | İkisi de yoksa hatırlatma kapalı |
 | `HATIRLAT_SABAH` · `HATIRLAT_AKSAM` | hayır | Varsayılan `08:30` · `21:00` (İstanbul) |
-| `ANTHROPIC_API_KEY` | yapay zekâ için | Varsa "Kafama at" cümlesini Claude işlere ayırır, önem/aciliyet önerir, söylenen gün ve saati çıkarır. Yoksa cümle olduğu gibi eklenir. Model: `AKIL_MODEL` (varsayılan `claude-opus-5-5`) |
 | `HATIRLAT_TOPLANTI` | hayır | Toplantıdan kaç dakika önce Telegram'dan haber verilsin; varsayılan `15`, `0` kapatır |
 | `PLAN_TAKVIM` | hayır | `kapali` yazılırsa saatli plan işleri Google Takvim'e yazılmaz |
 | `KART_ADRESI` | hayır | Randevu linkinin kökü; varsayılan `https://naim.nextusservis.com/` |
