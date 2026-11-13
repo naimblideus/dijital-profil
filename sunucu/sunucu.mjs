@@ -10,6 +10,7 @@ import musait from './musait.mjs';
 import randevu from './randevu.mjs';
 import { planIstegi, planGovdeSiniri, planAynasiBaslat } from './plan.mjs';
 import { toplantiIstegi, toplantiGovdeSiniri } from './toplanti.mjs';
+import { dersIstegi, dersGovdeSiniri, dersVideoDosyasi, dersVideoAl } from './ders.mjs';
 import { hatirlaticiBaslat } from './hatirlatici.mjs';
 
 const BURASI = path.dirname(fileURLToPath(import.meta.url));
@@ -151,6 +152,19 @@ async function toplantiAdaptoru(istek, cevap, urlYolu) {
   yaz(cevap, s.durum, s.basliklar, s.govde);
 }
 
+/** Günün dersi uçları da plan girişini paylaşır. */
+async function dersAdaptoru(istek, cevap, urlYolu) {
+  let govde;
+  if (istek.method === 'POST') {
+    try { govde = await govdeOku(istek, dersGovdeSiniri(urlYolu)); }
+    catch (h) { json(cevap, h.durum || 400, { sebep: h.durum === 413 ? 'buyuk' : 'govde' }); return; }
+  }
+  const s = await dersIstegi({
+    yontem: istek.method, yol: urlYolu, basliklar: istek.headers, govde, ip: istemciAdresi(istek)
+  });
+  yaz(cevap, s.durum, s.basliklar, s.govde);
+}
+
 /** URL yolunu site klasörü içinde güvenli bir dosya yoluna çevirir; dışarı çıkan her şey null. */
 function dosyaYolu(urlYolu) {
   let y;
@@ -166,7 +180,7 @@ function dosyaYolu(urlYolu) {
 function onbellekKurali(urlYolu, uzanti, dosya) {
   if (urlYolu.startsWith('/varlik/')) return { 'Cache-Control': 'public, max-age=31536000, immutable' };
   // Plan kabuğu her açılışta tazelenir (dağıtım sonrası eski sürüm kalmaz) ve çerçeveye alınamaz.
-  if (urlYolu.startsWith('/plan/') || urlYolu.startsWith('/toplanti/')) return { 'Cache-Control': 'no-cache', 'X-Frame-Options': 'DENY' };
+  if (urlYolu.startsWith('/plan/') || urlYolu.startsWith('/toplanti/') || urlYolu.startsWith('/ders/')) return { 'Cache-Control': 'no-cache', 'X-Frame-Options': 'DENY' };
   if (uzanti === '.vcf') {
     return {
       'Cache-Control': 'public, max-age=3600',
@@ -185,7 +199,12 @@ function statik(istek, cevap, urlYolu) {
   const yalnizBaslik = istek.method === 'HEAD';
   const dosya = dosyaYolu(urlYolu);
   if (!dosya) return bulunamadi(cevap, yalnizBaslik);
+  return dosyaSun(istek, cevap, dosya, (uzanti) => onbellekKurali(urlYolu, uzanti, dosya));
+}
 
+/** Bir dosyayı ETag ve parça isteği desteğiyle gönderir (statik site + ders videoları). */
+function dosyaSun(istek, cevap, dosya, kural) {
+  const yalnizBaslik = istek.method === 'HEAD';
   let bilgi;
   try { bilgi = fs.statSync(dosya); } catch { return bulunamadi(cevap, yalnizBaslik); }
   if (!bilgi.isFile()) return bulunamadi(cevap, yalnizBaslik);
@@ -197,7 +216,7 @@ function statik(istek, cevap, urlYolu) {
     'Accept-Ranges': 'bytes',
     ETag: etiket,
     'Last-Modified': bilgi.mtime.toUTCString(),
-    ...onbellekKurali(urlYolu, uzanti, dosya)
+    ...kural(uzanti)
   };
 
   if (istek.headers['if-none-match'] === etiket) return yaz(cevap, 304, basliklar, undefined, true);
@@ -259,8 +278,22 @@ export function sunucuOlustur() {
       if (urlYolu === '/api/toplanti' || urlYolu.startsWith('/api/toplanti/')) {
         return await toplantiAdaptoru(istek, cevap, urlYolu);
       }
+      const video = /^\/api\/ders\/video\/([^/]+)$/.exec(urlYolu);
+      if (video) {
+        if (istek.method === 'POST') {
+          const [durum, veri] = await dersVideoAl(istek, video[1]);
+          return json(cevap, durum, veri);
+        }
+        if (istek.method !== 'GET' && istek.method !== 'HEAD') return json(cevap, 405, { sebep: 'yontem' });
+        const dosya = dersVideoDosyasi(istek.headers, video[1]);
+        if (typeof dosya === 'number') return json(cevap, dosya, { sebep: dosya === 401 ? 'oturum' : 'yok' });
+        return dosyaSun(istek, cevap, dosya, () => ({ 'Cache-Control': 'private, max-age=3600' }));
+      }
+      if (urlYolu === '/api/ders' || urlYolu.startsWith('/api/ders/')) {
+        return await dersAdaptoru(istek, cevap, urlYolu);
+      }
       if (urlYolu.startsWith('/api/')) return json(cevap, 404, { sebep: 'yok' });
-      if (urlYolu === '/plan' || urlYolu === '/toplanti') {
+      if (urlYolu === '/plan' || urlYolu === '/toplanti' || urlYolu === '/ders') {
         const sorgu = new URL(istek.url, 'http://yerel').search;
         return yaz(cevap, 308, { Location: urlYolu + '/' + sorgu, 'Cache-Control': 'no-store' }, '');
       }

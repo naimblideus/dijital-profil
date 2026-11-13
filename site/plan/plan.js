@@ -1174,6 +1174,7 @@
     sayfaAc(
       el('p', { class: 'sayfa-baslik', text: 'DeepCore' }),
       secenek('Yenile', async () => { sayfaKapat(); await Promise.all([senkron(true), disYukle()]); bildir('Güncel'); }),
+      bag('Günün dersi', '/ders/', 'izle · uygula'),
       bag('Toplantılar', '/toplanti/', 'takvim'),
       crm ? bag('Nexus CRM', crm + '/merkez/benim', 'işlerim') : null,
       bag('Dijital kart', '/', 'randevu linki'),
@@ -1213,15 +1214,15 @@
         'İstek Gövdesi: JSON → yeni alan “metin” → değer: Dikte Edilen Metin.',
         'Adını “Kafama at” yap → Ana Ekrana Ekle.'),
 
-      el('p', { class: 'ara-baslik', text: '2 · Odakta Instagram engeli' }),
-      kopya('Adres', kok + '/api/plan/odak'),
+      el('p', { class: 'ara-baslik', text: '2 · Instagram kapısı (önce ders, odakta engel)' }),
+      kopya('Adres', kok + '/api/ders/kapi'),
       kopya('Anahtar', 'Bearer ' + r.v.anahtar),
-      kopya('Plan adresi', kok + '/plan/'),
       adimlar(
         'Kestirmeler → Otomasyon → + → Uygulama → Instagram → Açıldığında → Hemen Çalıştır.',
         '“URL’nin İçeriğini Al” ekle → adresi yapıştır → Başlıklar: “Authorization” = anahtar.',
-        '“Eğer” ekle → URL’nin İçeriği · şudur · evet',
-        'Eğer’in içine “URL’leri Aç” ekle → plan adresini yapıştır. Bitti.'),
+        '“Eğer” ekle → URL’nin İçeriği · şu değildir · hayir',
+        'Eğer’in içine “URL’leri Aç” ekle → URL olarak “URL’nin İçeriği”ni seç. Bitti.',
+        'Günün dersi bitmediyse ders, odak sürüyorsa plan açılır; ikisi de yoksa Instagram açık kalır.'),
       secenek('Kapat', sayfaKapat, null, 'sade'));
   }
 

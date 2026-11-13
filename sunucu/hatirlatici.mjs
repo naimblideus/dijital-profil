@@ -26,6 +26,7 @@ import { fileURLToPath } from 'node:url';
 import { istanbulParcalari } from './takvim.mjs';
 import { planGorevleri } from './plan.mjs';
 import { yaklasanToplantilar } from './toplanti.mjs';
+import { dersBugunSayisi } from './ders.mjs';
 
 const BURASI = path.dirname(fileURLToPath(import.meta.url));
 const PENCERE_DK = 90;
@@ -54,8 +55,8 @@ function sohbetKimligi() {
 export function hatirlaticiAcikMi() { return Boolean(botAnahtari() && sohbetKimligi()); }
 
 const telegramKoku = () => String(process.env.TELEGRAM_API || 'https://api.telegram.org').replace(/\/+$/, '');
-const planAdresi = () =>
-  String(process.env.KART_ADRESI || 'https://naim.nextusservis.com').trim().replace(/\/+$/, '') + '/plan/';
+const kartKoku = () => String(process.env.KART_ADRESI || 'https://naim.nextusservis.com').trim().replace(/\/+$/, '');
+const planAdresi = () => kartKoku() + '/plan/';
 
 function saatDakikasi(tur) {
   const t = TURLER[tur];
@@ -141,7 +142,7 @@ async function toplantilariAl(simdi) {
 }
 
 /** Sabah: bugünün 3'ü, ilk saat bloğu, kafada bekleyen iş sayısı. */
-export function sabahMetni(bugun, toplantilar = []) {
+export function sabahMetni(bugun, toplantilar = [], dersSayisi = 0) {
   const satirlar = [];
   const uc = ucu(bugun);
   if (uc.length) {
@@ -158,6 +159,7 @@ export function sabahMetni(bugun, toplantilar = []) {
     satirlar.push('', 'Bugünkü görüşmeler:');
     toplantilar.forEach((t) => satirlar.push(`• ${saatYaz(t.bas)} ${toplantiAdi(t)}`));
   }
+  if (dersSayisi) satirlar.push('', `Günün dersi: ${dersSayisi} kısa video hazır.`);
   return satirlar.join('\n');
 }
 
@@ -181,7 +183,7 @@ export function aksamMetni(bugun, yarin) {
 
 /* ---------- gönderim ---------- */
 
-async function gonder(metin, dugme) {
+async function gonder(metin, dugme, ekDugme) {
   const y = await fetch(`${telegramKoku()}/bot${botAnahtari()}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -189,7 +191,7 @@ async function gonder(metin, dugme) {
       chat_id: sohbetKimligi(),
       text: metin,
       disable_web_page_preview: true,
-      reply_markup: { inline_keyboard: [[dugme || { text: 'Planı aç', url: planAdresi() }]] }
+      reply_markup: { inline_keyboard: [[dugme || { text: 'Planı aç', url: planAdresi() }], ...(ekDugme ? [[ekDugme]] : [])] }
     }),
     signal: AbortSignal.timeout(10_000)
   });
@@ -219,8 +221,9 @@ export async function hatirlatKontrol(simdi = new Date()) {
         const gunun = tur === 'sabah'
           ? (await toplantilariAl(simdi)).filter((t) => gunMetni(istanbulParcalari(new Date(t.bas))) === gun && t.durum !== 'gorusuldu')
           : [];
-        const metin = tur === 'sabah' ? sabahMetni(bugun, gunun) : aksamMetni(bugun, await planGorevleri(ertesiGun(gun)));
-        await gonder(metin);
+        const ders = tur === 'sabah' ? await dersBugunSayisi() : 0;
+        const metin = tur === 'sabah' ? sabahMetni(bugun, gunun, ders) : aksamMetni(bugun, await planGorevleri(ertesiGun(gun)));
+        await gonder(metin, null, ders ? { text: 'Dersi aç', url: kartKoku() + '/ders/' } : null);
         await kayitYaz({ ...kayit, [tur]: gun });
         giden.push(tur);
       } catch (h) {

@@ -1,0 +1,61 @@
+/* /ders — Günün dersi. Değişkenler ve ortak parçalar /toplanti/temel.css'ten gelir. */
+
+.kabuk { padding-bottom: calc(var(--alt-guvenli) + 32px); }
+
+.ders-ust { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.ders-ust h1 { margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -.02em; line-height: 1.15; }
+.ders-ust a { color: var(--murekkep-2); font-size: 14px; font-weight: 600; text-decoration: none; padding: 8px 2px; }
+.adim { display: flex; gap: 6px; }
+.adim i { flex: 1; height: 5px; border-radius: var(--r-pill); background: var(--kart-2); }
+.adim i.tamam { background: var(--vurgu); }
+.adim i.simdi { background: var(--murekkep-2); }
+
+.video-kutu {
+  border-radius: var(--r-kart); overflow: hidden; background: #000; border: 1px solid var(--ayirici);
+  display: grid; place-items: center;
+}
+.video-kutu video { display: block; width: 100%; max-height: 62dvh; background: #000; }
+
+.kart { padding: 16px; border-radius: var(--r-kart); background: var(--kart); border: 1px solid var(--ayirici); display: flex; flex-direction: column; gap: 10px; }
+.kimden { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--vurgu-acik); }
+.kimden span { color: var(--etiket); }
+.ders-baslik { margin: 0; font-size: 20px; font-weight: 700; line-height: 1.3; text-wrap: balance; overflow-wrap: anywhere; }
+.maddeler { margin: 0; padding: 0 0 0 20px; display: flex; flex-direction: column; gap: 8px; font-size: 15.5px; line-height: 1.5; color: var(--murekkep); max-width: 62ch; }
+.maddeler li::marker { color: var(--vurgu-acik); font-weight: 700; }
+.kaynak { align-self: flex-start; color: var(--murekkep-2); font-size: 13.5px; font-weight: 600; }
+
+.uygula label { font-size: 15px; font-weight: 700; }
+.uygula textarea {
+  width: 100%; min-height: 84px; padding: 13px 15px; border-radius: 13px; resize: vertical;
+  background: var(--kart-2); border: 1px solid var(--ayirici-2); font-size: 16px; line-height: 1.45;
+}
+.uygula textarea:focus { outline: none; border-color: var(--vurgu); }
+.uygula textarea::placeholder { color: var(--etiket); }
+.oneri {
+  text-align: left; padding: 10px 13px; border-radius: 12px; background: var(--vurgu-yumusak);
+  color: var(--murekkep); font-size: 14px; line-height: 1.45;
+}
+.oneri b { display: block; margin-bottom: 2px; font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--vurgu-acik); }
+.hata { margin: 0; min-height: 0; color: var(--tehlike); font-size: 14px; font-weight: 600; }
+.dugmeler { display: flex; flex-direction: column; gap: 6px; }
+.dugmeler .birincil { margin-top: 0; }
+.ikincil { width: 100%; min-height: 48px; border-radius: 15px; color: var(--murekkep-2); font-size: 15px; font-weight: 600; }
+
+.bitis { padding: 34px 20px; text-align: center; align-items: center; }
+.bitis h2 { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -.01em; }
+.bitis p { margin: 0; color: var(--murekkep-2); font-size: 15px; max-width: 34ch; }
+.bitis .sayi { font-size: 56px; font-weight: 700; line-height: 1; letter-spacing: -.03em; color: var(--vurgu-acik); font-variant-numeric: tabular-nums; }
+.bitis a.birincil { display: grid; place-items: center; text-decoration: none; }
+
+.ara form { display: flex; gap: 8px; }
+.ara input {
+  flex: 1; min-width: 0; height: 50px; padding: 0 15px; border-radius: 14px;
+  background: var(--kart-2); border: 1px solid var(--ayirici-2); font-size: 16px;
+}
+.ara input:focus { outline: none; border-color: var(--vurgu); }
+.ara input::placeholder { color: var(--etiket); }
+.ara form button { flex: none; height: 50px; padding: 0 16px; border-radius: 14px; background: var(--kart-2); font-weight: 700; color: var(--murekkep); }
+.sonuc { padding: 12px 0 0; border-top: 1px solid var(--ayirici); display: flex; flex-direction: column; gap: 6px; }
+.sonuc h3 { margin: 0; font-size: 16px; font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; }
+.sonuc .maddeler { font-size: 14.5px; color: var(--murekkep-2); }
+.bos-sonuc { margin: 0; color: var(--murekkep-2); font-size: 14.5px; }

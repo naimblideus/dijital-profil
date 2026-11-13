@@ -4,7 +4,9 @@
      node test/yerel.mjs [port] --plan[=plan.md]      DeepCore planı açık (şifre: yerel-sifre),
                                                        veri geçici klasörde; plan.md verilirse yüklenir
      node test/yerel.mjs [port] --toplanti            /toplanti: sahte Google + sahte CRM + örnek toplantılar
-                                                       (şifre: yerel-sifre; --crmsiz ile CRM kapalı) */
+                                                       (şifre: yerel-sifre; --crmsiz ile CRM kapalı)
+     node test/yerel.mjs [port] --ders=video.mp4      /ders: örnek dersler, hepsi verilen videoyla
+                                                       (şifre: yerel-sifre) */
 
 import fs from 'node:fs';
 import os from 'node:os';
@@ -18,10 +20,12 @@ const port = Number(process.argv[2]) || 3090;
 const takvimsiz = process.argv.includes('--takvimsiz');
 const planArg = process.argv.find((a) => a === '--plan' || a.startsWith('--plan='));
 const toplantiKipi = process.argv.includes('--toplanti');
-if (planArg || toplantiKipi) {
+const dersArg = process.argv.find((a) => a.startsWith('--ders='));
+if (planArg || toplantiKipi || dersArg) {
   Object.assign(process.env, {
     PLAN_SIFRE: 'yerel-sifre',
     PLAN_ANAHTAR: 'yerel-anahtar-yalniz-bu-makinede-0',
+    KAFA_ANAHTAR: 'yerel-kafa-anahtari-yalniz-bu-makinede',
     PLAN_VERI: fs.mkdtempSync(path.join(os.tmpdir(), 'plan-yerel-'))
   });
 }
@@ -77,8 +81,37 @@ async function ornekToplantilar() {
   });
 }
 
+/** Ekranda görülecek örnek dersler: üç hesap, bir de videosuz arşiv kartı. */
+async function ornekDersler() {
+  const kok = `http://localhost:${port}`;
+  const yetki = { Authorization: 'Bearer ' + process.env.PLAN_ANAHTAR };
+  const dersler = [
+    { id: 'ornekA1', hesap: 'hormozi', konu: 'Teklif', baslik: 'Fiyatı düşürme, değeri büyüt', sira: 90, sure: 48,
+      ozet: ['İndirim müşteriye “asıl fiyat buydu” der; güveni düşürür.', 'Aynı fiyata bir garanti ya da hızlı kurulum eklemek teklifi daha çekici yapar.', 'Müşteri fiyata değil, alacağı sonuca ve ne kadar çabuk alacağına bakar.'],
+      uygulama: 'Bugünkü teklifte indirimi çıkar, yerine 45 dakikada kurulum sözünü yaz.', soru: 'İndirim yerine teklife ne eklenir, neden?' },
+    { id: 'ornekB1', hesap: 'danmartell', konu: 'Zaman', baslik: 'Saatlik değerinin altındaki işi devret', sira: 80, sure: 55,
+      ozet: ['Önce kendi saatlik değerini hesapla.', 'Bunun dörtte birine yaptırabileceğin her iş devredilecek iştir.', 'Devrederken sonucu tarif et, adımları değil.'],
+      uygulama: 'Bu hafta üç kez yaptığım bir işi yazıp bir ekip arkadaşına devredeceğim.', soru: 'Hangi iş devredilir, hangi ölçüyle karar verilir?' },
+    { id: 'ornekC1', hesap: 'leilahormozi', konu: 'Ekip', baslik: 'Geri bildirimi 24 saat içinde ver', sira: 70, sure: 40,
+      ozet: ['Geç gelen geri bildirim ceza gibi algılanır.', 'Davranışı söyle, kişiliği değil.', 'Bir sonraki sefer ne beklediğini tek cümleyle bitir.'],
+      uygulama: 'Dünkü aramayı dinleyip bugün tek cümle geri bildirim vereceğim.', soru: 'İyi geri bildirimin üç parçası nedir?' },
+    { id: 'ornekD1', hesap: 'hormozi', konu: 'Satış', baslik: 'İtirazı cevaplamadan önce tekrar et', sira: 60, sure: 35,
+      ozet: ['Müşterinin itirazını kendi cümlesiyle geri söyle.', 'Sonra “başka bir şey var mı” diye sor.', 'Asıl itiraz çoğu zaman ikinci söylenendir.'],
+      uygulama: 'İlk “pahalı” itirazında önce tekrar edip sonra soracağım.', soru: 'İtiraz gelince ilk iki adım nedir?' },
+    { id: 'ornekArsiv1', hesap: 'garyvee', konu: 'İçerik', baslik: 'Belgele, üretme', sira: 1, arsiv: true, url: 'https://www.instagram.com/garyvee/',
+      ozet: ['Yaptığın işi kaydetmek, içerik uydurmaktan kolaydır.', 'Tutarlılık kaliteden önce gelir.'] }
+  ];
+  await fetch(kok + '/api/ders/yukle', { method: 'POST', headers: { ...yetki, 'Content-Type': 'application/json' }, body: JSON.stringify({ dersler }) });
+  const video = fs.readFileSync(dersArg.slice('--ders='.length));
+  for (const d of dersler) {
+    if (!d.arsiv) await fetch(kok + '/api/ders/video/' + d.id, { method: 'POST', headers: { ...yetki, 'Content-Type': 'video/mp4' }, body: video });
+  }
+  console.log(`[yerel] dersler: ${kok}/ders/ · şifre: yerel-sifre`);
+}
+
 sunucuOlustur().listen(port, async () => {
   console.log(`[yerel] http://localhost:${port} · ${not}`);
+  if (dersArg) await ornekDersler();
   if (toplantiKipi) {
     if (google) await ornekToplantilar();
     console.log(`[yerel] toplantılar: http://localhost:${port}/toplanti/ · şifre: yerel-sifre · CRM: ${process.env.NEXUS_CRM_URL ? 'sahte' : 'kapalı'}`);

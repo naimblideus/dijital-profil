@@ -373,6 +373,46 @@ export async function planGorevleri(gun) {
   return b.durum.gorevler.filter((g) => g.gun === gun).map((g) => ({ ...g }));
 }
 
+/* ---------- Günün dersi (/ders) için dar kapılar: ders.mjs plan dosyasına kendisi dokunmaz ---------- */
+
+/** Bugüne saatsiz iş ekler (dersten çıkan "bugün nerede uygulayacağım" satırı). Kimliğini döndürür. */
+export async function planaIsEkle(baslik, not = '') {
+  const temiz = String(baslik || '').replace(/\s+/g, ' ').trim().slice(0, 300);
+  if (!temiz) throw new PlanHatasi(400, 'metin');
+  const bugun = istanbulBugun();
+  const id = await degistir((d) => {
+    const g = {
+      id: 'e-' + crypto.randomBytes(5).toString('hex'),
+      gun: bugun, gunIlk: bugun, sira: sonSira(d, bugun) + 1,
+      alan: null, baslik: temiz, dk: null, not: String(not || '').slice(0, 4000), bas: null, bit: null,
+      bitti: false, bittiZaman: null, kaynak: 'ders', olusturuldu: new Date().toISOString()
+    };
+    d.gorevler.push(g);
+    return g.id;
+  });
+  aynaTetikle();
+  return id;
+}
+
+/** Verilen işlerin bitiş zamanı: { kimlik: ISO | null }. Silinmiş iş sonuçta yer almaz. */
+export async function planGorevDurumlari(idler) {
+  await zincir;
+  const istenen = new Set(idler);
+  const sonuc = {};
+  for (const g of yukle().durum.gorevler) if (istenen.has(g.id)) sonuc[g.id] = g.bitti ? (g.bittiZaman || g.olusturuldu) : null;
+  return sonuc;
+}
+
+/** Derin odak sürüyor mu? */
+export async function planOdakta() {
+  await zincir;
+  return odakSuruyor(yukle().durum);
+}
+
+/** Kestirme anahtarı (KAFA_ANAHTAR) ile mi gelindi? */
+export function planKafaYetkili(basliklar) { return kafaYetkili({ basliklar }); }
+export function planKafaKuruluMu() { return Boolean(kafaAnahtari()); }
+
 /* Toplantı ekranı (/toplanti) AYNI girişi kullanır: ayrı şifre yok, aynı çerez, aynı makine anahtarı. */
 export function planKurulduMu() { return Boolean(sifre()); }
 export function planYetkili(basliklar) { return yetkili({ basliklar }); }

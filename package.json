@@ -6,6 +6,6 @@
   "engines": { "node": ">=22" },
   "scripts": {
     "start": "node sunucu/sunucu.mjs",
-    "test": "node --test test/sunucu.test.mjs test/plan.test.mjs test/toplanti.test.mjs test/kafa-hatirlatma.test.mjs test/matris-odak-takvim.test.mjs test/akil-toplanti.test.mjs"
+    "test": "node --test test/sunucu.test.mjs test/plan.test.mjs test/toplanti.test.mjs test/kafa-hatirlatma.test.mjs test/matris-odak-takvim.test.mjs test/akil-toplanti.test.mjs test/ders.test.mjs"
   }
 }
