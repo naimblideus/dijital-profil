@@ -74,7 +74,43 @@ function bosDurum() {
     surum: 1, guncellendi: null, haftalar: [], gorevler: [], silinenler: [],
     seanslar: [], kapanislar: [], ayarlar: { haftalikDerinHedef: 20 },
     takvimAyna: {},     // görev kimliği → { e: Google etkinliği, i: imza } (plan-takvim.mjs)
-    odak: null          // { bas, bitis, baslik } — süren derin odak (Instagram kestirmesi sorar)
+    odak: null,         // { bas, bitis, baslik } — süren derin odak (Instagram kestirmesi sorar)
+    hedefHaftalar: [],  // [{ bas: Pazartesi, hedefler: [≤3 metin], kuruldu: gün }] — "Haftayı kur"
+    aliskanlik: {}      // gün → elle işaretlenen alışkanlıklar (hareket, derin); gerisi veriden hesaplanır
+  };
+}
+
+/* ======================= alışkanlıklar =======================
+   Beş alışkanlık; çoğu kendiliğinden işaretlenir:
+     plan     Sabah planı      — o gün Bugünün 3'ünden en az biri seçili
+     derin    90 dk derin iş   — o gün Odaklan ile ≥ 90 dk (ya da elle "sayaçsız yaptım")
+     hareket  30 dk hareket    — yalnız elle
+     kapanis  Günü kapat       — kapanış ritüeli yapıldı
+     hafta    Haftalık gözden geçirme — bu hafta "Haftayı kur" kaydedildi ya da bu hafta önceden kuruldu
+              (Pazar akşamı kurulan hafta, hem biten haftayı hem yeni haftayı işaretler)
+   İstemcide (plan.js) aynı kural var; değişirse ikisi birlikte değişir. */
+export const ALISKANLIKLAR = ['plan', 'derin', 'hareket', 'kapanis', 'hafta'];
+const ELLE_ALISKANLIK = new Set(['derin', 'hareket']);
+const DERIN_ESIK = 90;
+
+/** Gün (YYYY-AA-GG) → o haftanın pazartesisi. */
+export function haftaBasi(gun) {
+  const t = new Date(gun + 'T12:00:00Z');
+  t.setUTCDate(t.getUTCDate() - ((t.getUTCDay() + 6) % 7));
+  return t.toISOString().slice(0, 10);
+}
+
+/** Bir günde hangi alışkanlıklar yapıldı? */
+export function gunAliskanliklari(d, gun) {
+  const elle = new Set((d.aliskanlik && d.aliskanlik[gun]) || []);
+  const hb = haftaBasi(gun);
+  const derinDk = (d.seanslar || []).filter((s) => s.gun === gun && s.derin !== false).reduce((t, s) => t + s.dk, 0);
+  return {
+    plan: (d.gorevler || []).some((g) => g.gun === gun && g.ust),
+    derin: derinDk >= DERIN_ESIK || elle.has('derin'),
+    hareket: elle.has('hareket'),
+    kapanis: (d.kapanislar || []).includes(gun),
+    hafta: (d.hedefHaftalar || []).some((h) => h.kuruldu && h.kuruldu <= gun && (h.bas === hb || haftaBasi(h.kuruldu) === hb))
   };
 }
 
@@ -126,6 +162,20 @@ function gecerliDurum(v) {
   }
   if (v.odak && typeof v.odak.bitis === 'string' && !Number.isNaN(Date.parse(v.odak.bitis))) {
     d.odak = { bas: String(v.odak.bas || ''), bitis: v.odak.bitis, baslik: String(v.odak.baslik || '').slice(0, 300) };
+  }
+  d.hedefHaftalar = Array.isArray(v.hedefHaftalar)
+    ? v.hedefHaftalar.filter((h) => h && gecerliGun(h.bas) && Array.isArray(h.hedefler))
+      .map((h) => ({
+        bas: h.bas,
+        hedefler: h.hedefler.filter((x) => typeof x === 'string').map((x) => x.slice(0, 200)).slice(0, 3),
+        kuruldu: gecerliGun(h.kuruldu) ? h.kuruldu : null
+      })).slice(-60)
+    : [];
+  if (v.aliskanlik && typeof v.aliskanlik === 'object' && !Array.isArray(v.aliskanlik)) {
+    for (const gun of Object.keys(v.aliskanlik).filter(gecerliGun).sort().slice(-400)) {
+      const l = Array.isArray(v.aliskanlik[gun]) ? v.aliskanlik[gun].filter((a) => ELLE_ALISKANLIK.has(a)) : [];
+      if (l.length) d.aliskanlik[gun] = [...new Set(l)];
+    }
   }
   return d;
 }
@@ -403,6 +453,15 @@ export async function planGorevDurumlari(idler) {
   return sonuc;
 }
 
+/** Telegram için: günün alışkanlıkları + o haftanın hedefleri (kopya, yalnız okur). */
+export async function planGunOzeti(gun) {
+  await zincir;
+  const d = yukle().durum;
+  const hb = haftaBasi(gun);
+  const h = d.hedefHaftalar.find((x) => x.bas === hb);
+  return { aliskanlik: gunAliskanliklari(d, gun), hedefler: h ? h.hedefler.slice() : [] };
+}
+
 /** Derin odak sürüyor mu? */
 export async function planOdakta() {
   await zincir;
@@ -434,6 +493,11 @@ function gunDogrula(s) { if (!gecerliGun(s)) throw new PlanHatasi(400, 'gun'); r
 function metin(s, ad, sinir) {
   if (typeof s !== 'string' || s.length > sinir) throw new PlanHatasi(400, ad);
   return s;
+}
+
+function hedefNo(n) {
+  if (![1, 2, 3].includes(n)) throw new PlanHatasi(400, 'hedef');
+  return n;
 }
 
 function gorevBul(d, id) {
@@ -474,6 +538,7 @@ function islemUygula(d, v) {
         bas: gs.bas || null, bit: gs.bit || null,
         bitti: false, bittiZaman: null, kaynak: 'elle', olusturuldu: simdi
       };
+      if (v.hedef != null) g.hedef = hedefNo(v.hedef);
       d.gorevler.push(g);
       return { gorev: g };
     }
@@ -521,6 +586,9 @@ function islemUygula(d, v) {
         g.kadran = v.kadran;
         delete g.oneri;                                      // karar verildi: öneri düşer
       }
+      if (v.hedef !== undefined) {                           // haftanın hangi hedefine hizmet ediyor (1-3)
+        if (v.hedef === null) delete g.hedef; else g.hedef = hedefNo(v.hedef);
+      }
       g.duzenlendi = true;               // sonraki plan yüklemesi elle düzeltmeyi ezmez
       return { gorev: g };
     }
@@ -557,6 +625,26 @@ function islemUygula(d, v) {
         baslik: metin(v.baslik ?? '', 'baslik', 300).trim()
       };
       return { odak: d.odak };
+    }
+    case 'haftaKur': {
+      // Haftanın en çok 3 hedefi. Kaydetmek o haftanın "gözden geçirme" alışkanlığını da işaretler.
+      const bas = gunDogrula(v.bas);
+      if (haftaBasi(bas) !== bas) throw new PlanHatasi(400, 'bas');
+      if (!Array.isArray(v.hedefler) || v.hedefler.length > 3) throw new PlanHatasi(400, 'hedefler');
+      const hedefler = v.hedefler.map((x) => metin(x, 'hedefler', 200).replace(/\s+/g, ' ').trim()).filter(Boolean);
+      const h = { bas, hedefler, kuruldu: istanbulBugun() };
+      d.hedefHaftalar = (d.hedefHaftalar || []).filter((x) => x.bas !== bas).concat(h)
+        .sort((a, b) => a.bas.localeCompare(b.bas)).slice(-60);
+      return { hafta: h };
+    }
+    case 'aliskanlik': {
+      const gun = gunDogrula(v.gun);
+      if (!ELLE_ALISKANLIK.has(v.ad)) throw new PlanHatasi(400, 'ad');
+      if (gun > istanbulBugun()) throw new PlanHatasi(400, 'gun');
+      const l = new Set(d.aliskanlik[gun] || []);
+      if (v.yapildi === true) l.add(v.ad); else l.delete(v.ad);
+      if (l.size) d.aliskanlik[gun] = [...l]; else delete d.aliskanlik[gun];
+      return { gun, aliskanlik: d.aliskanlik[gun] || [] };
     }
     case 'hedef': {
       if (!Number.isInteger(v.saat) || v.saat < 0 || v.saat > 80) throw new PlanHatasi(400, 'saat');
@@ -675,6 +763,7 @@ export async function planIstegi(ctx) {
           haftalar: b.durum.haftalar, gorevler: b.durum.gorevler,
           seanslar: b.durum.seanslar.slice(-1500),
           kapanislar: b.durum.kapanislar, ayarlar: b.durum.ayarlar,
+          hedefHaftalar: b.durum.hedefHaftalar, aliskanlik: b.durum.aliskanlik,
           odak: odakSuruyor(b.durum) ? b.durum.odak : null,
           takvimAyna: aynaAcikMi()
         });

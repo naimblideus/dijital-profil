@@ -111,7 +111,13 @@
     sag: ['M9 5l7 7-7 7'],
     arti: ['M12 5v14', 'M5 12h14'],
     menu: ['M4 7h16', 'M4 12h16', 'M4 17h10'],
-    oynat: ['M8 5.5v13l10.5-6.5z']
+    oynat: ['M8 5.5v13l10.5-6.5z'],
+    // alışkanlıklar
+    plan: ['M9 6.5h11', 'M9 12h11', 'M9 17.5h11', 'M4.5 6.5h.01', 'M4.5 12h.01', 'M4.5 17.5h.01'],
+    derin: ['M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16z', 'M12 9v4l2.5 2', 'M10 2.5h4'],
+    hareket: ['M13 3L5.5 13.5h6L10.5 21 18.5 10.5h-6z'],
+    kapanis: ['M19.5 14.5A7.5 7.5 0 1 1 9.5 4.5a6 6 0 0 0 10 10z'],
+    hafta: ['M4.5 6.5h15v13h-15z', 'M4.5 10.5h15', 'M8.5 3.5v3', 'M15.5 3.5v3']
   };
   function ikon(ad) {
     const ns = 'http://www.w3.org/2000/svg';
@@ -138,7 +144,9 @@
     toplantilar: [],                             // takvimdeki kişili toplantılar (kart randevuları dahil)
     crmHepsi: false,
     odak: null,                                  // sunucudaki süren odak (Instagram kestirmesi bunu sorar)
-    takvimAyna: false                            // saatli işler Google Takvim'e de yazılıyor mu
+    takvimAyna: false,                           // saatli işler Google Takvim'e de yazılıyor mu
+    hedefHaftalar: [],                           // [{ bas: Pazartesi, hedefler: [≤3], kuruldu }] — "Haftayı kur"
+    aliskanlik: {}                               // gün → elle işaretlenen alışkanlıklar (hareket, derin)
   };
   {
     const istenen = new URLSearchParams(location.search).get('gun');
@@ -223,6 +231,38 @@
     D.guncellendi = v.guncellendi || null;
     D.odak = v.odak || null;
     D.takvimAyna = v.takvimAyna === true;
+    D.hedefHaftalar = Array.isArray(v.hedefHaftalar) ? v.hedefHaftalar : [];
+    D.aliskanlik = v.aliskanlik && typeof v.aliskanlik === 'object' ? v.aliskanlik : {};
+  }
+
+  /* ======================= hafta ve alışkanlıklar ======================= */
+
+  function haftaHedefi(bas) { return D.hedefHaftalar.find((h) => h.bas === bas) || null; }
+
+  /** "Haftayı kur" hangi haftayı kurar? Pazar günü gelecek haftayı, diğer günler bu haftayı. */
+  function kurulacakHafta() {
+    const b = bugun();
+    return tarih(b).getDay() === 0 ? gunEkle(b, 1) : haftaBasi(b);
+  }
+
+  // Sunucudaki gunAliskanliklari ile AYNI kural (sunucu/plan.mjs). Değişirse ikisi birlikte değişir.
+  const ALISKANLIK = [
+    { ad: 'plan', etiket: 'Plan', uzun: 'Sabah planı' },
+    { ad: 'derin', etiket: 'Derin 90', uzun: '90 dk derin iş' },
+    { ad: 'hareket', etiket: 'Hareket', uzun: '30 dk hareket' },
+    { ad: 'kapanis', etiket: 'Kapanış', uzun: 'Günü kapat' },
+    { ad: 'hafta', etiket: 'Hafta', uzun: 'Haftalık gözden geçirme' }
+  ];
+  function aliskanliklar(gun) {
+    const elle = new Set(D.aliskanlik[gun] || []);
+    const hb = haftaBasi(gun);
+    return {
+      plan: D.gorevler.some((g) => g.gun === gun && g.ust),
+      derin: derinDk([gun]) >= 90 || elle.has('derin'),
+      hareket: elle.has('hareket'),
+      kapanis: D.kapanislar.includes(gun),
+      hafta: D.hedefHaftalar.some((h) => h.kuruldu && h.kuruldu <= gun && (h.bas === hb || haftaBasi(h.kuruldu) === hb))
+    };
   }
 
   /* ======================= sunucu ======================= */
@@ -303,6 +343,9 @@
       el('span', {}, el('b', { text: `${biten}/${liste.length}` }), ' bitti'),
       derinGun ? el('span', {}, 'Derin ', el('b', { text: sureYaz(derinGun) })) : null,
       el('span', {}, 'Hafta ', el('b', { text: (derinDk(hafta) / 60).toFixed(1).replace('.', ',') }), ` / ${D.ayarlar.haftalikDerinHedef} sa derin`)));
+    p.push(aliskanlikSeridi(secili));
+    const haftaKart = haftaBolumu(secili);
+    if (haftaKart) p.push(haftaKart);
 
     // uyarılar
     if (!D.kalici) {
@@ -393,6 +436,88 @@
 
   function bolum(baslik, sag, ...icerik) {
     return el('section', { class: 'bolum' }, el('div', { class: 'bolum-bas' }, el('h2', { text: baslik }), sag || null), ...icerik);
+  }
+
+  /* --- Alışkanlıklar: beş halka, tek dokunuş --- */
+  function aliskanlikSeridi(gun) {
+    const gelecek = gun > bugun();
+    const a = aliskanliklar(gun);
+    const hafta = Array.from({ length: 7 }, (_, i) => gunEkle(haftaBasi(gun), i));
+    const haftaYapilan = hafta.map((x) => (x <= bugun() ? aliskanliklar(x) : null));
+    const serit = el('div', { class: 'aliskanliklar', role: 'group', 'aria-label': 'Alışkanlıklar' });
+    for (const k of ALISKANLIK) {
+      const yapildi = a[k.ad];
+      const noktalar = k.ad === 'hafta'
+        ? el('span', { class: 'noktalar' }, el('i', { class: yapildi ? 'dolu' : null }))
+        : el('span', { class: 'noktalar' }, hafta.map((x, i) => el('i', {
+          class: [haftaYapilan[i] && haftaYapilan[i][k.ad] ? 'dolu' : null, x === gun ? 'bu' : null].filter(Boolean).join(' ') || null
+        })));
+      const sayi = k.ad === 'hafta' ? null : haftaYapilan.filter((x) => x && x[k.ad]).length;
+      serit.append(el('button', {
+        class: 'aliskanlik' + (yapildi ? ' yapildi' : ''), type: 'button', disabled: gelecek || null,
+        'aria-pressed': String(yapildi),
+        'aria-label': `${k.uzun}: ${yapildi ? 'yapıldı' : 'yapılmadı'}${sayi !== null ? `, bu hafta ${sayi} gün` : ''}`,
+        onclick: () => aliskanlikDokun(k, gun, yapildi)
+      }, el('span', { class: 'halka' }, ikon(yapildi ? 'tik' : k.ad)), el('span', { class: 'ad', text: k.etiket }), noktalar));
+    }
+    return serit;
+  }
+
+  function aliskanlikDokun(k, gun, yapildi) {
+    if (k.ad === 'hareket') return elleIsaretle('hareket', gun, !yapildi);
+    if (k.ad === 'plan') return yapildi ? bildir('Bugünün 3’ü seçili ✓') : ustSecSayfasi(gun);
+    if (k.ad === 'kapanis') return yapildi ? bildir('Gün kapandı ✓') : kapanisSayfasi();
+    if (k.ad === 'hafta') return haftaKurSayfasi();
+    // derin: Odaklan 90 dk ya da sayaçsız yaptıysa elle
+    const elle = (D.aliskanlik[gun] || []).includes('derin');
+    const dk = derinDk([gun]);
+    sayfaAc(
+      el('p', { class: 'sayfa-baslik', text: '90 dk derin iş' }),
+      el('p', { class: 'sayfa-soru', text: dk ? `Bu gün ${sureYaz(dk)} derin çalıştın.` : 'Odaklan ile 90 dakika dolunca kendiliğinden işaretlenir.' }),
+      gun === bugun() && !yapildi ? secenek('Odaklan', () => odakBaslat({ id: null, baslik: 'Derin iş', dk: 90 }), '90 dk') : null,
+      !elle && dk < 90 ? secenek('Sayaçsız yaptım, işaretle', () => { sayfaKapat(); elleIsaretle('derin', gun, true); }) : null,
+      elle ? secenek('İşareti kaldır', () => { sayfaKapat(); elleIsaretle('derin', gun, false); }) : null,
+      secenek('Vazgeç', sayfaKapat, null, 'sade'));
+  }
+
+  async function elleIsaretle(ad, gun, yapildi) {
+    const eski = (D.aliskanlik[gun] || []).slice();
+    const l = new Set(eski);
+    if (yapildi) l.add(ad); else l.delete(ad);
+    D.aliskanlik[gun] = [...l];
+    ciz();
+    if (yapildi && navigator.vibrate) navigator.vibrate(8);
+    const r = await islem({ islem: 'aliskanlik', gun, ad, yapildi });
+    if (!r.ok) { D.aliskanlik[gun] = eski; ciz(); return hataBildir(r); }
+    D.guncellendi = null;
+  }
+
+  /* --- Bu hafta: en çok 3 hedef --- */
+  function haftaBolumu(gun) {
+    const hb = haftaBasi(gun);
+    const h = haftaHedefi(hb);
+    const pazarMi = gun === bugun() && tarih(gun).getDay() === 0;
+    const gelecekKurulu = haftaHedefi(gunEkle(hb, 7));
+    if (!h || !h.hedefler.length) {
+      if (hb !== haftaBasi(bugun())) return null;              // yalnız bu hafta için kurulum öner
+      if (pazarMi && gelecekKurulu) return null;
+      return el('div', { class: 'serit-uyari hafta-kur' },
+        el('p', {}, pazarMi ? 'Gelecek haftayı kur' : 'Haftayı kur', el('small', { text: '3 hedef seç, işleri günlere dağıt.' })),
+        el('button', { type: 'button', onclick: haftaKurSayfasi }, 'Kur'));
+    }
+    const haftaGunleri = new Set(Array.from({ length: 7 }, (_, i) => gunEkle(hb, i)));
+    const grup = el('div', { class: 'grup hafta-hedefleri' });
+    h.hedefler.forEach((m, i) => {
+      const isler = D.gorevler.filter((g) => g.hedef === i + 1 && haftaGunleri.has(g.gun));
+      grup.append(el('button', { class: 'hedef-satir', type: 'button', onclick: haftaKurSayfasi },
+        el('span', { class: 'hedef-no', text: String(i + 1) }),
+        el('span', { class: 'hedef-metin', text: m }),
+        isler.length ? el('small', { text: `${isler.filter((g) => g.bitti).length}/${isler.length}` }) : null));
+    });
+    const sag = pazarMi && !gelecekKurulu
+      ? el('button', { class: 'bolum-dugme', type: 'button', onclick: haftaKurSayfasi }, 'Gelecek haftayı kur')
+      : null;
+    return el('section', { class: 'bolum bolum-hafta' }, el('div', { class: 'bolum-bas kucuk' }, el('h2', { text: 'Bu hafta' }), sag), grup);
   }
 
   /* --- Bugünün 3'ü --- */
@@ -533,6 +658,7 @@
     if (g.bas) alt.append(el('span', { text: `${g.bas}–${g.bit}` }));
     else if (g.dk) alt.append(el('span', { text: `${g.dk} dk` }));
     if (crmId) alt.append(el('span', { class: 'rozet oneri', text: 'CRM' }));
+    if (g.hedef) alt.append(el('span', { class: 'rozet hedef', text: `Hedef ${g.hedef}` }));
     if (g.kadran && !g.bitti && !g.ust && KADRAN[g.kadran].rozet) alt.append(el('span', { class: 'rozet kadran-' + g.kadran, text: KADRAN[g.kadran].rozet }));
     else if (!g.kadran && g.oneri && !g.bitti && !g.ust) alt.append(el('span', { class: 'rozet oneri', text: 'Öneri: ' + KADRAN[g.oneri].kisa }));
     if (not && !acik) alt.append(el('span', { text: 'not' }));
@@ -1054,6 +1180,7 @@
       g.gun !== b ? secenek('Bugüne al', () => { sayfaKapat(); tasi(g, b); }) : null,
       g.gun !== yarin ? secenek('Yarına at', () => { sayfaKapat(); tasi(g, yarin); }) : null,
       secenek('Başka güne…', () => gunSecSayfasi(g)),
+      haftaHedefi(haftaBasi(g.gun))?.hedefler.length ? secenek('Haftanın hedefine bağla', () => hedefBagSayfasi(g), g.hedef ? `Hedef ${g.hedef}` : null) : null,
       secenek('Düzenle', () => duzenleSayfasi(g)),
       crmAdres ? bag('CRM’de aç', crmAdres) : null,
       secenek('Sil', () => { sayfaKapat(); sil(g); }, null, 'tehlike'),
@@ -1124,6 +1251,133 @@
     sayfaAc(form, secenek('Vazgeç', sayfaKapat, null, 'sade'));
   }
 
+  /** Haftayı kur — 1) geçen haftaya kısa bakış  2) en çok 3 hedef  3) işleri günlere dağıt. */
+  function haftaKurSayfasi() {
+    const bas = kurulacakHafta();
+    const h = haftaHedefi(bas);
+    const once = gunEkle(bas, -7);
+    const onceki = haftaHedefi(once);
+    const onceGunler = Array.from({ length: 7 }, (_, i) => gunEkle(once, i)).filter((x) => x <= bugun());
+    const onceIsler = D.gorevler.filter((g) => onceGunler.includes(g.gun));
+    const onceAlis = onceGunler.reduce((t, x) => t + Object.values(aliskanliklar(x)).filter(Boolean).length, 0);
+    const bakis = onceIsler.length || onceAlis || onceki
+      ? el('div', { class: 'gecen-hafta' },
+        el('p', { class: 'ara-baslik', text: 'Geçen hafta' }),
+        onceki && onceki.hedefler.length ? el('ol', { class: 'gecen-hedefler' }, onceki.hedefler.map((m, i) => {
+          const l = onceIsler.filter((g) => g.hedef === i + 1);
+          return el('li', {}, el('span', { text: m }), l.length ? el('small', { text: ` · ${l.filter((g) => g.bitti).length}/${l.length}` }) : null);
+        })) : null,
+        el('p', { class: 'gecen-ozet' },
+          el('span', {}, el('b', { text: `${onceIsler.filter((g) => g.bitti).length}/${onceIsler.length}` }), ' iş'),
+          el('span', {}, el('b', { text: (derinDk(onceGunler) / 60).toFixed(1).replace('.', ',') }), ' sa derin'),
+          el('span', {}, el('b', { text: String(onceAlis) }), ' alışkanlık')),
+        el('p', { class: 'aciklama', text: 'Ne işe yaradı, ne yaramadı? Bir dakika düşün, sonra yaz.' }))
+      : null;
+    const girdiler = [0, 1, 2].map((i) => el('input', {
+      type: 'text', maxlength: '200', enterkeyhint: i < 2 ? 'next' : 'done', id: 'hk-' + i,
+      placeholder: ['En önemli hedef', 'İkinci hedef', 'Üçüncü (boş kalabilir)'][i], value: (h && h.hedefler[i]) || ''
+    }));
+    girdiler.forEach((g, i) => g.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && i < 2) { e.preventDefault(); girdiler[i + 1].focus(); }
+    }));
+    const form = el('form', { class: 'duzen' },
+      girdiler.flatMap((g, i) => [el('label', { for: 'hk-' + i, text: `${i + 1}. hedef` }), g]),
+      el('button', { class: 'birincil', type: 'submit' }, 'Kaydet, işleri dağıt'));
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const hedefler = girdiler.map((g) => g.value.replace(/\s+/g, ' ').trim()).filter(Boolean);
+      if (!hedefler.length) return girdiler[0].focus();
+      sayfaKapat();
+      const eski = D.hedefHaftalar.slice();
+      D.hedefHaftalar = D.hedefHaftalar.filter((x) => x.bas !== bas).concat({ bas, hedefler, kuruldu: bugun() });
+      ciz();
+      const r = await islem({ islem: 'haftaKur', bas, hedefler });
+      if (!r.ok) { D.hedefHaftalar = eski; ciz(); return hataBildir(r); }
+      D.hedefHaftalar = D.hedefHaftalar.filter((x) => x.bas !== bas).concat(r.v.hafta);
+      D.guncellendi = null;
+      ciz();
+      dagitSayfasi(bas);
+    });
+    const d = tarih(bas);
+    sayfaAc(
+      el('p', { class: 'sayfa-baslik', text: 'Haftayı kur' }),
+      el('p', { class: 'sayfa-soru', text: `${d.getDate()} ${AY[d.getMonth()]} haftası. Bu hafta neyi bitirirsen iyi geçmiş olur?` }),
+      bakis, form,
+      secenek('Vazgeç', sayfaKapat, null, 'sade'));
+  }
+
+  /** Hedeflere bağlı işleri haftanın günlerine dağıt: hedef seç → gün seç → yaz. */
+  function dagitSayfasi(bas) {
+    const h = haftaHedefi(bas);
+    if (!h) return;
+    const gunler = Array.from({ length: 7 }, (_, i) => gunEkle(bas, i)).filter((x) => x >= bugun());
+    let gun = gunler[0];
+    let hedef = 1;
+    const yaz = el('input', { type: 'text', maxlength: '300', placeholder: 'İş yaz, Enter’a bas…', enterkeyhint: 'done', 'aria-label': 'Yeni iş' });
+    const hedefKutu = el('div', { class: 'cipler' });
+    const gunKutu = el('div', { class: 'cipler' });
+    const liste = el('div', { class: 'dagit-liste' });
+    const yenile = () => {
+      hedefKutu.replaceChildren(...h.hedefler.map((m, i) => el('button', {
+        class: 'cip hedef-cip', type: 'button', 'aria-pressed': String(hedef === i + 1), title: m,
+        onclick: () => { hedef = hedef === i + 1 ? null : i + 1; yenile(); }
+      }, el('b', { text: String(i + 1) }), ' ', m)));
+      gunKutu.replaceChildren(...gunler.map((x) => el('button', {
+        class: 'cip', type: 'button', 'aria-pressed': String(x === gun), 'aria-label': gunBasligi(x), onclick: () => { gun = x; yenile(); }
+      }, `${GUN_KISA[tarih(x).getDay()]} ${tarih(x).getDate()}`)));
+      const isler = D.gorevler.filter((g) => g.hedef && gunler.includes(g.gun)).sort((a, b) => a.gun.localeCompare(b.gun));
+      liste.replaceChildren(...isler.map((g) => el('p', { class: 'dagit-satir' },
+        el('span', { class: 'dagit-gun', text: GUN_KISA[tarih(g.gun).getDay()] }),
+        el('span', { class: 'dagit-baslik', text: g.baslik }),
+        el('span', { class: 'rozet hedef', text: String(g.hedef) }))));
+    };
+    const form = el('form', { class: 'duzen' }, yaz);
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const v = yaz.value.trim();
+      if (!v) return yaz.focus();
+      yaz.value = '';
+      const r = await islem({ islem: 'ekle', gun, metin: v, hedef: hedef || undefined });
+      if (!r.ok || !r.v.gorev) { yaz.value = v; return hataBildir(r); }
+      D.gorevler.push(r.v.gorev);
+      D.guncellendi = null;
+      yenile();
+      yaz.focus();
+    });
+    yenile();
+    sayfaAc(
+      el('p', { class: 'sayfa-baslik', text: 'İşleri günlere dağıt' }),
+      el('p', { class: 'sayfa-soru', text: 'Hedefi ve günü seç, işi yaz. Saatini o gün koyarsın.' }),
+      el('p', { class: 'ara-baslik', text: 'Hedef' }), hedefKutu,
+      el('p', { class: 'ara-baslik', text: 'Gün' }), gunKutu,
+      el('p', { class: 'ara-baslik', text: 'İş' }), form,
+      liste,
+      secenek('Bitti', () => { sayfaKapat(); ciz(); bildir('Hafta kuruldu ✓'); }, null, 'sade'));
+  }
+
+  function hedefBagSayfasi(g) {
+    const h = haftaHedefi(haftaBasi(g.gun));
+    if (!h) return;
+    const bagla = async (n) => {
+      sayfaKapat();
+      const eski = g.hedef;
+      if (n) g.hedef = n; else delete g.hedef;
+      ciz();
+      const r = await islem({ islem: 'duzenle', id: g.id, hedef: n });
+      if (!r.ok) { g.hedef = eski; ciz(); return hataBildir(r); }
+      if (!n) delete g.hedef;
+      Object.assign(g, r.v.gorev);
+      D.guncellendi = null;
+      ciz();
+    };
+    sayfaAc(
+      el('p', { class: 'sayfa-baslik', text: g.baslik }),
+      el('p', { class: 'sayfa-soru', text: 'Bu iş hangi hedefe hizmet ediyor?' }),
+      h.hedefler.map((m, i) => secenek(`${i + 1}. ${m}`, () => bagla(i + 1), g.hedef === i + 1 ? '✓' : null)),
+      g.hedef ? secenek('Bağı kaldır', () => bagla(null)) : null,
+      secenek('Vazgeç', sayfaKapat, null, 'sade'));
+  }
+
   function kapanisSayfasi() {
     const maddeler = ['Bugünün listesine son kez baktım', 'Kalanları yarına ya da başka güne attım', 'Yarının 3’ünü ve saatlerini çizdim'];
     const kutular = maddeler.map((m, i) => el('input', { type: 'checkbox', id: 'k-' + i }));
@@ -1173,6 +1427,7 @@
     const crm = crmKoku();
     sayfaAc(
       el('p', { class: 'sayfa-baslik', text: 'DeepCore' }),
+      secenek('Haftayı kur', haftaKurSayfasi, '3 hedef · günlere dağıt'),
       secenek('Yenile', async () => { sayfaKapat(); await Promise.all([senkron(true), disYukle()]); bildir('Güncel'); }),
       bag('Günün dersi', '/ders/', 'izle · uygula'),
       bag('Toplantılar', '/toplanti/', 'takvim'),

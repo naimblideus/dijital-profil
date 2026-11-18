@@ -24,7 +24,7 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { istanbulParcalari } from './takvim.mjs';
-import { planGorevleri } from './plan.mjs';
+import { planGorevleri, planGunOzeti } from './plan.mjs';
 import { yaklasanToplantilar } from './toplanti.mjs';
 import { dersBugunSayisi } from './ders.mjs';
 
@@ -142,8 +142,9 @@ async function toplantilariAl(simdi) {
 }
 
 /** Sabah: bugünün 3'ü, ilk saat bloğu, kafada bekleyen iş sayısı. */
-export function sabahMetni(bugun, toplantilar = [], dersSayisi = 0) {
+export function sabahMetni(bugun, toplantilar = [], dersSayisi = 0, ozet = null) {
   const satirlar = [];
+  if (ozet && ozet.hedefler && ozet.hedefler.length) satirlar.push(`Bu hafta: ${ozet.hedefler.join(' · ')}`, '');
   const uc = ucu(bugun);
   if (uc.length) {
     satirlar.push("Günaydın. Bugünün 3'ü:");
@@ -163,10 +164,20 @@ export function sabahMetni(bugun, toplantilar = [], dersSayisi = 0) {
   return satirlar.join('\n');
 }
 
+const ALISKANLIK_ADI = { plan: 'Sabah planı', derin: '90 dk derin', hareket: 'Hareket', kapanis: 'Günü kapat', hafta: 'Haftalık bakış' };
+
+/** "Alışkanlık 3/5 · eksik: Hareket, Günü kapat" — tek satır. */
+export function aliskanlikSatiri(a) {
+  const adlar = Object.keys(ALISKANLIK_ADI);
+  const eksik = adlar.filter((k) => !a[k]).map((k) => ALISKANLIK_ADI[k]);
+  return `Alışkanlık ${adlar.length - eksik.length}/${adlar.length}` + (eksik.length ? ` · eksik: ${eksik.join(', ')}` : ' ✓');
+}
+
 /** Akşam: bugün kaç iş bitti, yarın kurulu mu. */
-export function aksamMetni(bugun, yarin) {
+export function aksamMetni(bugun, yarin, ozet = null) {
   const satirlar = [];
   if (bugun.length) satirlar.push(`Bugün ${bugun.filter((g) => g.bitti).length}/${bugun.length} iş bitti.`);
+  if (ozet && ozet.aliskanlik) satirlar.push(aliskanlikSatiri(ozet.aliskanlik));
   const uc = ucu(yarin);
   if (uc.length >= 3) {
     satirlar.push("Yarın hazır ✓");
@@ -222,7 +233,8 @@ export async function hatirlatKontrol(simdi = new Date()) {
           ? (await toplantilariAl(simdi)).filter((t) => gunMetni(istanbulParcalari(new Date(t.bas))) === gun && t.durum !== 'gorusuldu')
           : [];
         const ders = tur === 'sabah' ? await dersBugunSayisi() : 0;
-        const metin = tur === 'sabah' ? sabahMetni(bugun, gunun, ders) : aksamMetni(bugun, await planGorevleri(ertesiGun(gun)));
+        const ozet = await planGunOzeti(gun).catch(() => null);
+        const metin = tur === 'sabah' ? sabahMetni(bugun, gunun, ders, ozet) : aksamMetni(bugun, await planGorevleri(ertesiGun(gun)), ozet);
         await gonder(metin, null, ders ? { text: 'Dersi aç', url: kartKoku() + '/ders/' } : null);
         await kayitYaz({ ...kayit, [tur]: gun });
         giden.push(tur);
