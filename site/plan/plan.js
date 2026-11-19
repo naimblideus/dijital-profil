@@ -604,9 +604,10 @@
   /* --- Kafamdakiler: saatsiz işler + CRM --- */
   function kafamBolumu(gun, liste) {
     const saatsiz = liste.filter((g) => !g.bas && !g.ust);
-    const KADRAN_SIRA = { 1: 0, 3: 1, 2: 2 };
-    const acik = saatsiz.filter((g) => !g.bitti)
-      .sort((a, b) => (KADRAN_SIRA[a.kadran] ?? 3) - (KADRAN_SIRA[b.kadran] ?? 3));
+    // Önemden aşağı: acil+önemli → önemli → acil → gereksiz → sınıflanmamış.
+    // Henüz onaylanmamış Claude önerisi de aynı yere dizilir (onaylı olan, aynı kutuda önce gelir).
+    const sira = (g) => (g.kadran || g.oneri || 5) * 2 + (g.kadran ? 0 : 1);
+    const acik = saatsiz.filter((g) => !g.bitti).sort((a, b) => sira(a) - sira(b));
     const siniflanmamis = acik.filter((g) => !g.kadran && !g.gecici);
     const onerili = siniflanmamis.filter((g) => g.oneri);
     const bitmis = saatsiz.filter((g) => g.bitti);
