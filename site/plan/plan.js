@@ -1065,28 +1065,21 @@
     ekranAcikKalsin();
   }
 
-  /** "Dağıldım, bırak" bir sürtünme ister: ilk dokunuşta 30 sn geri sayım başlar, ancak sonra bırakılır.
-      Dürtü genelde bu sürede geçer; geçmezse karar bilinçli verilmiş olur. */
+  /** "Dağıldım, bırak" odak ekranı açıldıktan 30 sn sonra etkinleşir (kurucunun isteği):
+      ilk dürtüyle hemen bırakılamaz; 30 sn sonra tek dokunuş yeter. */
   const BIRAK_BEKLE_SN = 30;
   function dagildimDugmesi() {
-    const d = el('button', { class: 'sade-beyaz', type: 'button' }, 'Dağıldım, bırak');
-    let hazir = false, sayac = null;
-    d.addEventListener('click', () => {
-      if (hazir) return odakBitir(true);
-      if (sayac) return;
-      let kalan = BIRAK_BEKLE_SN;
-      d.disabled = true;
-      d.textContent = `Bir nefes al · ${kalan} sn`;
-      sayac = setInterval(() => {
-        if (!d.isConnected) return clearInterval(sayac);
-        kalan--;
-        if (kalan > 0) { d.textContent = `Bir nefes al · ${kalan} sn`; return; }
-        clearInterval(sayac);
-        hazir = true;
-        d.disabled = false;
-        d.textContent = 'Yine de bırak';
-      }, 1000);
-    });
+    const d = el('button', { class: 'sade-beyaz', type: 'button', disabled: true, onclick: () => odakBitir(true) });
+    let kalan = BIRAK_BEKLE_SN;
+    d.textContent = `Dağıldım, bırak · ${kalan} sn`;
+    const sayac = setInterval(() => {
+      if (!d.isConnected) return clearInterval(sayac);
+      kalan--;
+      if (kalan > 0) { d.textContent = `Dağıldım, bırak · ${kalan} sn`; return; }
+      clearInterval(sayac);
+      d.disabled = false;
+      d.textContent = 'Dağıldım, bırak';
+    }, 1000);
     return d;
   }
 
