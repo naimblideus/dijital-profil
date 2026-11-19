@@ -146,7 +146,8 @@
     odak: null,                                  // sunucudaki süren odak (Instagram kestirmesi bunu sorar)
     takvimAyna: false,                           // saatli işler Google Takvim'e de yazılıyor mu
     hedefHaftalar: [],                           // [{ bas: Pazartesi, hedefler: [≤3], kuruldu }] — "Haftayı kur"
-    aliskanlik: {}                               // gün → elle işaretlenen alışkanlıklar (hareket, derin)
+    aliskanlik: {},                              // gün → elle işaretlenen alışkanlıklar (hareket, derin)
+    cevrimdisi: false                            // ağ yok: ekrandaki plan telefonda saklanan son kopya
   };
   {
     const istenen = new URLSearchParams(location.search).get('gun');
@@ -278,7 +279,7 @@
       let v = null;
       try { v = await c.json(); } catch { /* boş */ }
       if (c.status === 401 && yol !== '/giris') girisGoster(senkronZamanlayici ? 'Oturumun kapandı. Şifreni tekrar yaz.' : undefined);
-      return { ok: c.ok, durum: c.status, v: v || {} };
+      return { ok: c.ok, durum: c.status, v: v || {}, cevrimdisi: c.headers.get('X-Cevrimdisi') === '1' };
     } catch {
       return { ok: false, durum: 0, v: {} };
     }
@@ -348,6 +349,10 @@
     if (haftaKart) p.push(haftaKart);
 
     // uyarılar
+    if (D.cevrimdisi) {
+      p.push(el('div', { class: 'serit-uyari', role: 'status' },
+        el('p', {}, 'İnternet yok', el('small', { text: 'Son kayıtlı planı görüyorsun. Değişiklikler bağlanınca yapılabilir.' }))));
+    }
     if (!D.kalici) {
       p.push(el('div', { class: 'serit-uyari', role: 'status' },
         el('p', {}, 'Veriler kalıcı değil', el('small', { text: 'Coolify → Storages → /app/veri birimini ekle.' }))));
@@ -1436,7 +1441,7 @@
       secenek('iPhone kestirmeleri', kestirmeSayfasi, 'sesle ekle · Instagram engeli'),
       secenek('Haftalık derin hedef', hedefSayfasi, `${D.ayarlar.haftalikDerinHedef} sa`),
       secenek('Yedeği indir', () => { sayfaKapat(); yedekIndir(); }, 'JSON'),
-      secenek('Çıkış yap', async () => { sayfaKapat(); await silmeyiGonder(); await istek('/cikis', {}); girisGoster('Çıkış yapıldı.'); }, null, 'tehlike'),
+      secenek('Çıkış yap', async () => { sayfaKapat(); await silmeyiGonder(); await istek('/cikis', {}); navigator.serviceWorker?.controller?.postMessage('veriyi-sil'); girisGoster('Çıkış yapıldı.'); }, null, 'tehlike'),
       secenek('Kapat', sayfaKapat, null, 'sade'));
   }
 
@@ -1577,6 +1582,7 @@
     if (!zorla && Date.now() - disZamani > 5 * 60e3) disYukle();
     const r = await istek('');
     if (!r.ok) return;
+    if (D.cevrimdisi !== r.cevrimdisi) { D.cevrimdisi = r.cevrimdisi; zorla = true; }
     if (!zorla && r.v.guncellendi && r.v.guncellendi === D.guncellendi) {
       if (D.secili === bugun()) ciz();                 // "Şimdi" kartı ve şimdi çizgisi saatle değişir
       return;
@@ -1597,6 +1603,8 @@
     }
   });
   addEventListener('pagehide', () => silmeyiGonder(true));
+  addEventListener('online', () => { if (senkronZamanlayici) { senkron(true); disYukle(); } });
+  addEventListener('offline', () => { if (senkronZamanlayici) senkron(false); });
 
   let sonBugun = bugun();
   setInterval(() => {
@@ -1635,9 +1643,14 @@
     kok.setAttribute('aria-busy', 'true');
     const r = await istek('');
     if (r.ok) {
+      D.cevrimdisi = r.cevrimdisi;
       veriAl(r.v);
       ciz();
       senkronBaslat();
+      if (new URLSearchParams(location.search).get('hafta') === 'kur') {   // ana ekran kısayolu
+        history.replaceState(null, '', location.pathname);
+        haftaKurSayfasi();
+      }
       disYukle();
       let o = acikOdak();
       if (!o && D.odak) {                              // odak başka yerde (ana ekran uygulaması) başladı
@@ -1656,6 +1669,11 @@
       return durumEkrani('Kayıt yapılamıyor', 'Sunucu veri klasörüne yazamıyor. Coolify → Storages → ', el('code', { text: '/app/veri' }), ' birimini kontrol et.');
     }
     return durumEkrani('Bağlanılamadı', 'İnternet bağlantını kontrol et.');
+  }
+
+  // Çevrimdışı yardımcı: ağ yokken son planı gösterir (site/plan/sw.js).
+  if ('serviceWorker' in navigator) {
+    addEventListener('load', () => { navigator.serviceWorker.register('/plan/sw.js', { scope: '/plan/' }).catch(() => {}); });
   }
 
   baslat();
