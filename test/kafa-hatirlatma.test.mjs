@@ -118,12 +118,14 @@ test('kafa: anahtar planı okuyamaz, işlem yapamaz', async () => {
   assert.equal((await istek('/api/plan/yukle', { yontem: 'POST', anahtar: KAFA, govde: { metin: '## 2026-11-10 Pzt\n- x' } })).durum, 401);
 });
 
-test('kafa: boş metin 400, uzun metin 300 karaktere kırpılır', async () => {
+test('kafa: boş metin 400, uzun döküm kısa başlıkla görünür, tamamı Claude sırasına gider', async () => {
   assert.equal((await istek('/api/plan/kafa', { yontem: 'POST', anahtar: KAFA, govde: { metin: '   ' } })).durum, 400);
   assert.equal((await istek('/api/plan/kafa', { yontem: 'POST', anahtar: KAFA, govde: {} })).durum, 400);
-  const r = await istek('/api/plan/kafa', { yontem: 'POST', anahtar: KAFA, govde: { metin: 'a'.repeat(900) } });
+  const r = await istek('/api/plan/kafa', { yontem: 'POST', anahtar: KAFA, govde: { metin: 'a'.repeat(9000) } });
   assert.equal(r.durum, 200);
-  assert.equal(r.v.baslik.length, 300);
+  assert.ok(r.v.baslik.length <= 120);
+  const s = await istek('/api/plan/kuyruk', { anahtar: PLAN_ANAHTAR });
+  assert.equal(s.v.bekleyen.at(-1).metin.length, 6000, 'Claude dökümün tamamını alır (6000 sınırı)');
 });
 
 test('kafa: JSON olmayan gövde 415, GET 405', async () => {

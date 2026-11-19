@@ -665,6 +665,7 @@
     if (g.bas) alt.append(el('span', { text: `${g.bas}–${g.bit}` }));
     else if (g.dk) alt.append(el('span', { text: `${g.dk} dk` }));
     if (crmId) alt.append(el('span', { class: 'rozet oneri', text: 'CRM' }));
+    if (g.bekliyor) alt.append(el('span', { class: 'rozet oneri', text: 'Claude ayırıyor…' }));
     if (g.hedef) alt.append(el('span', { class: 'rozet hedef', text: `Hedef ${g.hedef}` }));
     if (g.kadran && !g.bitti && !g.ust && KADRAN[g.kadran].rozet) alt.append(el('span', { class: 'rozet kadran-' + g.kadran, text: KADRAN[g.kadran].rozet }));
     else if (!g.kadran && g.oneri && !g.bitti && !g.ust) alt.append(el('span', { class: 'rozet oneri', text: 'Öneri: ' + KADRAN[g.oneri].kisa }));
@@ -693,10 +694,10 @@
 
   function ekleCubuguKur() {
     if (ekleCubugu && document.body.contains(ekleCubugu)) {
-      ekleGirdi.placeholder = D.secili === bugun() ? 'Aklındakini yaz · 14:00-15:00 ile saate koy' : `${gunBasligi(D.secili)} — ekle…`;
+      ekleGirdi.placeholder = D.secili === bugun() ? 'Aklındakini yaz ya da hepsini dök · Claude ayırır' : `${gunBasligi(D.secili)} — ekle…`;
       return;
     }
-    ekleGirdi = el('input', { type: 'text', name: 'gorev', autocomplete: 'off', enterkeyhint: 'done', maxlength: '600', 'aria-label': 'Yeni iş' });
+    ekleGirdi = el('input', { type: 'text', name: 'gorev', autocomplete: 'off', enterkeyhint: 'done', maxlength: '6000', 'aria-label': 'Yeni iş' });
     ekleDugme = el('button', { type: 'submit', 'aria-label': 'Ekle', disabled: true }, ikon('arti'));
     ekleGirdi.addEventListener('input', () => { ekleDugme.disabled = !ekleGirdi.value.trim(); });
     const form = el('form', { autocomplete: 'off' }, ekleGirdi, ekleDugme);
@@ -757,9 +758,25 @@
     return null;
   }
 
+  // Uzun yazı = kafa dökümü: bilgisayardaki Claude işlere ayırır ve önem/aciliyet önerir.
+  const DOKUM_SINIRI = 100;
+  function dokumMu(m) { return m.length > DOKUM_SINIRI && !/^\[|^\d{1,2}[:.]\d{2}\s*[-–]/.test(m); }
+
+  async function dokumGonder(m) {
+    const r = await istek('/kafa', { metin: m });
+    if (!r.ok) {
+      hataBildir(r);
+      if (ekleGirdi && !ekleGirdi.value) { ekleGirdi.value = m; ekleDugme.disabled = false; }
+      return;
+    }
+    await senkron(true);
+    bildir('Claude işlere ayırıyor — birazdan “Önerileri gör”', null, null, 4000);
+  }
+
   async function ekle(metin) {
     const m = String(metin).trim();
     if (!m) return;
+    if (D.secili === bugun() && dokumMu(m)) return dokumGonder(m);
     const g = await ekleSunucu(m, D.secili);
     if (!g) {
       if (ekleGirdi && !ekleGirdi.value) { ekleGirdi.value = m; ekleDugme.disabled = false; }
@@ -1178,6 +1195,7 @@
     sayfaAc(
       el('p', { class: 'sayfa-baslik', text: g.baslik }),
       not ? el('p', { class: 'sayfa-soru', text: not }) : null,
+      g.bekliyor && g.ham && g.ham !== g.baslik ? el('p', { class: 'sayfa-soru', text: g.ham }) : null,
       !g.bitti ? secenek('Odaklan', () => odakBaslat(g), g.bas ? `${g.bas}–${g.bit}` : (g.dk ? `${g.dk} dk` : '50 dk')) : null,
       secenek(g.bitti ? 'Geri al' : 'Bitti', () => { sayfaKapat(); isaretle(g); }),
       secenek(g.ust ? 'Bugünün 3’ünden çıkar' : 'Bugünün 3’üne koy', () => { sayfaKapat(); ustYap(g, !g.ust); }),

@@ -15,7 +15,7 @@ const GUN = /^\d{4}-\d{2}-\d{2}$/;
 export function isleriTemizle(ham) {
   if (!Array.isArray(ham)) return null;
   const isler = [];
-  for (const i of ham.slice(0, 8)) {
+  for (const i of ham.slice(0, 40)) {             // uzun döküm 30+ işe ayrılabilir
     if (!i || typeof i !== 'object') continue;
     const baslik = String(i.baslik || '').replace(/\s+/g, ' ').trim().slice(0, 300);
     if (!baslik) continue;

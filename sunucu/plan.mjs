@@ -38,7 +38,16 @@ const GOREV_ID = /^[ep]-[0-9a-f]{10,12}$/;
 
 /** Gövde sınırı yola göre: plan.md yüklemesi büyük olabilir, gerisi küçük. */
 export function planGovdeSiniri(yol) {
-  return yol === '/api/plan/yukle' ? YUKLEME_SINIRI : ISLEM_SINIRI;
+  if (yol === '/api/plan/yukle') return YUKLEME_SINIRI;
+  if (yol === '/api/plan/kuyruk' || yol === '/api/plan/kafa') return 64 * 1024;   // uzun "kafamdakiler" dökümü
+  return ISLEM_SINIRI;
+}
+
+const KAFA_EN_UZUN = 6000;                      // bir seferde döküm: ~1-2 sayfa konuşma
+
+/** Uzun dökümün ekranda görünen kısa adı; tamamı `ham`da durur ve Claude'a o gider. */
+function kafaBasligi(metin) {
+  return metin.length <= 300 ? metin : metin.slice(0, 117).replace(/\s+\S*$/, '') + '…';
 }
 
 class PlanHatasi extends Error {
@@ -821,8 +830,9 @@ export async function planIstegi(ctx) {
         if (kafaIzleri.length >= KAFA_DAKIKA_SINIRI) return cevap(429, { sebep: 'cok-fazla' });
         const v = jsonGovde(ctx);
         if (typeof v.metin !== 'string') throw new PlanHatasi(400, 'metin');
-        const baslik = v.metin.replace(/\s+/g, ' ').trim().slice(0, 300);
-        if (!baslik) throw new PlanHatasi(400, 'metin');
+        const ham = v.metin.replace(/\s+/g, ' ').trim().slice(0, KAFA_EN_UZUN);
+        if (!ham) throw new PlanHatasi(400, 'metin');
+        const baslik = kafaBasligi(ham);
         kafaIzleri.push(simdi);
         const bugun = istanbulBugun();
         // Cümle olduğu gibi eklenir ve sıraya girer; bilgisayardaki Claude sonra işlere ayırıp öneri yazar.
@@ -832,7 +842,7 @@ export async function planIstegi(ctx) {
             gun: bugun, gunIlk: bugun, sira: sonSira(d, bugun) + 1,
             alan: null, baslik, dk: null, not: '', bas: null, bit: null,
             bitti: false, bittiZaman: null, kaynak: 'kafa', olusturuldu: new Date().toISOString(),
-            bekliyor: true, ham: baslik
+            bekliyor: true, ham, hamBaslik: baslik
           });
         });
         aynaTetikle();
@@ -860,9 +870,9 @@ export async function planIstegi(ctx) {
           const g = d.gorevler.find((x) => x.id === v.id);
           if (!g || !g.bekliyor) return 0;
           delete g.bekliyor;
-          const ham = g.ham; delete g.ham;
+          const ilk = g.hamBaslik ?? g.ham; delete g.ham; delete g.hamBaslik;
           // Kullanıcı bu arada işi elle değiştirdiyse (başlık, kadran, saat, bitti) dokunma.
-          if (!isler || g.bitti || g.kadran || g.bas || g.baslik !== ham) return 0;
+          if (!isler || g.bitti || g.kadran || g.bas || g.baslik !== ilk) return 0;
           const zaman = new Date().toISOString();
           isler.forEach((i, n) => {
             const gun = i.gun && i.gun >= bugun ? i.gun : bugun;

@@ -40,7 +40,7 @@ Her iş için:
 - gun: iş başka bir güne aitse o gün (YYYY-AA-GG); bugün için ya da gün belirtilmemişse null. "yarın", "cuma", "haftaya salı" gibi ifadeleri verilen bugünün tarihine göre çevir.
 - bas ve bit: yalnız notta saat söylendiyse 24 saatlik "SS:DD". Bitiş söylenmediyse: görüşme için başlangıçtan 30 dakika, diğer işler için 60 dakika sonrası. Saat yoksa ikisi de null.
 
-Tek cümlede birden çok iş varsa ayır. Not iş içermiyorsa tek bir iş olarak aynen döndür, kadran 2.
+Tek cümlede birden çok iş varsa ayır. Not uzun bir döküm olabilir (sayfalarca konuşma): her ayrı işi ayrı yaz, aynı işi iki kez yazma, en çok 40 iş. Büyük bir hedefi ilk somut adımıyla yaz (örn. "19 müşteriyle toplantı planla" → "19 müşterinin görüşme listesini çıkar"). Not iş içermiyorsa tek bir iş olarak aynen döndür, kadran 2.
 
 Yalnız şu biçimde JSON yaz, başka hiçbir şey yazma:
 {"isler":[{"baslik":"...","kadran":2,"gun":null,"bas":null,"bit":null}]}`;
