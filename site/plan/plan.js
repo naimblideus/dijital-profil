@@ -3,7 +3,7 @@
      Şimdi kartı  → şu an ne yapmalıyım (görev ya da toplantı), tek dokunuşla Odaklan
      Bugünün 3'ü  → günün en önemli üç işi
      Saatler      → zaman ızgarası: saatli görevler + takvimdeki toplantılar (kart randevuları dahil)
-     Kafamdakiler → saatsiz işler + CRM'den gelenler (görevlerim, doğrulamam, bugünkü takipler)
+     Yapılacaklar → saatsiz işler (sesle/yazıyla dökülenler önde) + katlanır CRM listesi
    Veri ASLA innerHTML'e girmez; her dokunuş anında görünür, sunucu reddederse geri alınır. */
 'use strict';
 
@@ -387,8 +387,8 @@
           el('span', { class: 'metin' }, el('span', { class: 'baslik', text: toplantiAdi(x.t).replace(/^Toplantı · /, '') }),
             el('span', { class: 'alt' }, el('span', { text: `${saatDk(x.b)}–${saatDk(x.e)}` }), x.t.meet ? el('span', { text: 'Meet' }) : null)))))));
     }
+    p.push(kafamBolumu(secili, liste));                 // yapılacaklar önce, saat ızgarası altında
     p.push(saatBolumu(secili, liste));
-    p.push(kafamBolumu(secili, liste));
 
     // kapanış ritüeli
     if (gunFarki(bugun(), secili) <= 0 && liste.length) {
@@ -601,13 +601,14 @@
     return ad ? `Toplantı · ${ad}` : (t.baslik || 'Toplantı');
   }
 
-  /* --- Kafamdakiler: saatsiz işler + CRM --- */
+  /* --- Yapılacaklar: saatsiz işler; CRM tek satırda katlı --- */
   function kafamBolumu(gun, liste) {
     const saatsiz = liste.filter((g) => !g.bas && !g.ust);
     // Kurucunun sırası: acil+önemli → acil önemsiz → önemli → önemsiz → sınıflanmamış.
-    // Henüz onaylanmamış Claude önerisi de aynı yere dizilir (onaylı olan, aynı kutuda önce gelir).
+    // Aynı kutuda: sesle/yazıyla döktüklerim önce, sonra planla gelenler, en son CRM'den alınanlar.
     const KUTU_SIRA = { 1: 0, 3: 1, 2: 2, 4: 3 };
-    const sira = (g) => (KUTU_SIRA[g.kadran || g.oneri] ?? 4) * 2 + (g.kadran ? 0 : 1);
+    const kaynakSira = (g) => (crmIsareti(g) ? 2 : g.kaynak === 'plan' ? 1 : 0);
+    const sira = (g) => (KUTU_SIRA[g.kadran || g.oneri] ?? 4) * 6 + (g.kadran ? 0 : 3) + kaynakSira(g);
     const acik = saatsiz.filter((g) => !g.bitti).sort((a, b) => sira(a) - sira(b));
     const siniflanmamis = acik.filter((g) => !g.kadran && !g.gecici);
     const onerili = siniflanmamis.filter((g) => g.oneri);
@@ -617,29 +618,30 @@
       parca.push(el('div', { class: 'grup' }, [...acik, ...bitmis].map((g) => satir(g))));
     }
 
-    // CRM yalnız bugün görünür: "en güncel işlerim"
+    // CRM yalnız bugün ve katlı: benim döktüklerim önde, CRM istenince açılır.
     if (gun === bugun()) {
       const crm = crmBekleyen();
       if (crm.length) {
-        const sinir = D.crmHepsi ? crm.length : 5;
-        const grup = el('div', { class: 'grup', style: saatsiz.length ? 'margin-top:12px' : null }, crm.slice(0, sinir).map(crmSatiri));
-        if (crm.length > sinir) {
-          grup.append(el('button', { class: 'daha-fazla', type: 'button', onclick: () => { D.crmHepsi = true; ciz(); } }, `${crm.length - sinir} iş daha`));
+        const ac = el('button', { class: 'crm-ac', type: 'button', 'aria-expanded': String(D.crmHepsi), onclick: () => { D.crmHepsi = !D.crmHepsi; ciz(); } },
+          el('span', { text: `CRM’den ${crm.length} iş` }), el('small', { text: D.crmHepsi ? 'Gizle' : 'Göster' }));
+        parca.push(ac);
+        if (D.crmHepsi) {
+          parca.push(el('p', { class: 'bolum-not', style: 'margin:0 4px 8px', text: 'Dokun, bugüne al' }),
+            el('div', { class: 'grup' }, crm.map(crmSatiri)));
         }
-        parca.push(el('p', { class: 'bolum-not', style: 'margin:14px 4px 8px', text: 'CRM’den — dokun, bugüne al' }), grup);
       } else if (D.crm.durum === 'bekliyor') {
         parca.push(el('p', { class: 'bolum-not', text: 'CRM bağlantısı yayın bekliyor.' }));
       }
     }
     if (!parca.length) {
       parca.push(el('div', { class: 'grup' }, el('div', { class: 'satir bos-satir' },
-        el('span', { class: 'metin' }, el('span', { class: 'baslik', text: 'Aklındakini aşağıya yaz.' })))));
+        el('span', { class: 'metin' }, el('span', { class: 'baslik', text: 'Aklındakileri aşağıya dök — Claude işlere ayırır.' })))));
     }
     const sag = siniflanmamis.length
       ? el('button', { class: 'bolum-dugme', type: 'button', onclick: () => matrisSayfasi(siniflanmamis.map((g) => g.id)) },
         onerili.length ? `Önerileri gör · ${siniflanmamis.length}` : `Sınıflandır · ${siniflanmamis.length}`)
       : acik.length ? el('small', { text: `${acik.length} açık` }) : null;
-    return bolum('Kafamdakiler', sag, ...parca);
+    return bolum('Yapılacaklar', sag, ...parca);
   }
 
   function crmSatiri(i) {
@@ -962,7 +964,7 @@
       el('p', { class: 'sayfa-baslik', text: `${bas}’a ne koyalım?` }),
       el('p', { class: 'sayfa-soru', text: 'Bir iş seç ya da yenisini yaz. Süreyi sonra değiştirebilirsin.' }),
       form,
-      adaylar.length ? el('p', { class: 'ara-baslik', text: 'Kafamdakiler' }) : null,
+      adaylar.length ? el('p', { class: 'ara-baslik', text: 'Yapılacaklar' }) : null,
       adaylar.map((g) => secenek(g.baslik, () => koy(varsayilanSure(g.dk), async (b, e2) => { if (await duzenle(g, { bas: b, bit: e2 })) bildir(`${b}–${e2} saatine kondu`); }), g.dk ? `${g.dk} dk` : null)),
       crm.length ? el('p', { class: 'ara-baslik', text: 'CRM’den' }) : null,
       crm.map((i) => secenek(i.baslik, () => koy(varsayilanSure(i.dk), (b, e2) => crmAl(i, { bas: b, bit: e2 })), i.dk ? `${i.dk} dk` : null)),
@@ -1151,7 +1153,7 @@
         if (!ok) return sayfaKapat();
         if (k === 1) {
           if (!g.ust && ustler(g.gun).length < 3) await ustYap(g, true);
-          else if (!g.ust) bildir('Bugünün 3’ü dolu — Kafamdakiler’in en üstünde');
+          else if (!g.ust) bildir('Bugünün 3’ü dolu — Yapılacaklar’ın en üstünde');
           return sonraki();
         }
         if (k === 2) return yerlestirSayfasi({ tur: 'gorev', g }, sonraki);

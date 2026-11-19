@@ -881,7 +881,10 @@ export async function planIstegi(ctx) {
               alan: null, dk: null, not: '', bitti: false, bittiZaman: null, kaynak: 'kafa', olusturuldu: zaman
             };
             if (n > 0 || gun !== g.gun) { hedef.gun = gun; hedef.gunIlk = gun; hedef.sira = sonSira(d, gun) + 1; }
-            hedef.baslik = i.baslik; hedef.bas = i.bas; hedef.bit = i.bit; hedef.oneri = i.kadran;
+            hedef.baslik = i.baslik; hedef.bas = i.bas; hedef.bit = i.bit;
+            // Kurucu "onay adımı olmasın" dedi: Claude'un sınıfı doğrudan uygulanır (elle değiştirilebilir).
+            // Yalnız "gereksiz" (4) öneri olarak kalır; silmeye insan karar verir.
+            if (i.kadran === 4) hedef.oneri = 4; else hedef.kadran = i.kadran;
             if (n > 0) d.gorevler.push(hedef);
           });
           return isler.length;

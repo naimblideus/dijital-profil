@@ -113,8 +113,8 @@ test('sıra: cümle hemen eklenir, sıraya girer; sonuç gelince işlere ayrıl�
   const a = g.find((x) => x.baslik === 'Kabim sunumunu bitir');
   const b = g.find((x) => x.baslik === 'Ahmet Bey ile görüşme');
   assert.equal(g.length, 2);
-  assert.equal(a.oneri, 1);
-  assert.equal(a.kadran, undefined);
+  assert.equal(a.kadran, 1, 'Claude sınıfı doğrudan uygulanır');
+  assert.equal(a.oneri, undefined);
   assert.equal(a.gun, istanbulBugun());
   assert.equal(b.gun, yarin);
   assert.equal(b.bas, '15:00');
@@ -147,7 +147,14 @@ test('sıra: geçersiz saat ve geçmiş gün temizlenir, bozuk sonuçta cümle o
   [g] = await plan();
   assert.equal(g.gun, istanbulBugun());
   assert.equal(g.bas, null);
-  assert.equal(g.oneri, 2);
+  assert.equal(g.kadran, 2);
+
+  await kafa('gereksiz iş');
+  g = (await plan()).find((x) => x.baslik === 'gereksiz iş');
+  await sonuc(g.id, [{ baslik: 'Gereksiz iş', kadran: 4 }]);
+  g = (await plan()).find((x) => x.id === g.id);
+  assert.equal(g.oneri, 4, 'silme önerisi insana kalır');
+  assert.equal(g.kadran, undefined);
 
   await kafa('bozuk iş');
   g = (await plan()).find((x) => x.baslik === 'bozuk iş');

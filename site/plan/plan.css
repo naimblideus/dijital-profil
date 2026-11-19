@@ -497,3 +497,11 @@ dialog.sayfa::backdrop { background: rgba(0, 0, 0, .32); animation: sol .25s eas
 .dagit-satir { display: flex; align-items: center; gap: 10px; margin: 0; padding: 9px 4px; border-bottom: .5px solid var(--ayirici); font-size: 15px; }
 .dagit-gun { width: 24px; color: var(--metin-2); font-size: 13px; font-weight: 600; flex: none; }
 .dagit-baslik { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+
+/* Yapılacaklar: CRM tek satırda katlı */
+.crm-ac {
+  display: flex; align-items: center; justify-content: space-between; width: 100%; margin: 12px 0 10px;
+  padding: 12px 16px; border-radius: var(--r); background: var(--kart); box-shadow: var(--golge); font-size: 15px; color: var(--metin-2);
+}
+.crm-ac small { color: var(--vurgu); font-weight: 600; font-size: 15px; }
+.crm-ac:active { background: var(--dolgu); }
