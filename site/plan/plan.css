@@ -374,6 +374,7 @@ dialog.sayfa::backdrop { background: rgba(0, 0, 0, .32); animation: sol .25s eas
 .odak-dugmeler { display: flex; flex-direction: column; gap: 10px; }
 .odak .birincil { background: #fff; color: #000; flex: none; }
 .odak .sade-beyaz { color: rgba(255, 255, 255, .6); min-height: 46px; font-weight: 500; }
+.odak .sade-beyaz:disabled { opacity: .45; font-variant-numeric: tabular-nums; cursor: default; }
 
 /* ---------- giriş ---------- */
 .giris { min-height: 80dvh; display: grid; place-items: center; }

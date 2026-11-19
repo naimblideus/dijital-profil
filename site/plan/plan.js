@@ -1043,7 +1043,7 @@
         el('p', { class: 'odak-kural', text: 'Telefonu bırak. Tek iş. Bitince bas.' }),
         el('div', { class: 'odak-dugmeler' },
           el('button', { class: 'birincil', type: 'button', onclick: () => odakBitir(false) }, 'Bitir'),
-          el('button', { class: 'sade-beyaz', type: 'button', onclick: () => odakBitir(true) }, 'Dağıldım, bırak'))));
+          dagildimDugmesi())));
     document.body.append(odakEkrani);
     if (ekleCubugu) ekleCubugu.hidden = true;
     const tik = () => {
@@ -1063,6 +1063,31 @@
     clearInterval(odakZamanlayici);
     odakZamanlayici = setInterval(tik, 1000);
     ekranAcikKalsin();
+  }
+
+  /** "Dağıldım, bırak" bir sürtünme ister: ilk dokunuşta 30 sn geri sayım başlar, ancak sonra bırakılır.
+      Dürtü genelde bu sürede geçer; geçmezse karar bilinçli verilmiş olur. */
+  const BIRAK_BEKLE_SN = 30;
+  function dagildimDugmesi() {
+    const d = el('button', { class: 'sade-beyaz', type: 'button' }, 'Dağıldım, bırak');
+    let hazir = false, sayac = null;
+    d.addEventListener('click', () => {
+      if (hazir) return odakBitir(true);
+      if (sayac) return;
+      let kalan = BIRAK_BEKLE_SN;
+      d.disabled = true;
+      d.textContent = `Bir nefes al · ${kalan} sn`;
+      sayac = setInterval(() => {
+        if (!d.isConnected) return clearInterval(sayac);
+        kalan--;
+        if (kalan > 0) { d.textContent = `Bir nefes al · ${kalan} sn`; return; }
+        clearInterval(sayac);
+        hazir = true;
+        d.disabled = false;
+        d.textContent = 'Yine de bırak';
+      }, 1000);
+    });
+    return d;
   }
 
   async function odakBitir(dagildi) {
