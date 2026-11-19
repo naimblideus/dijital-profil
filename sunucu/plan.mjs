@@ -36,6 +36,9 @@ const YUKLEME_SINIRI = 512 * 1024;
 
 const GOREV_ID = /^[ep]-[0-9a-f]{10,12}$/;
 
+// Ekran sürümü: yeni yayında değişir, telefon bunu görünce eski ekranı yeniler.
+const SURUM = String(process.env.SOURCE_COMMIT || process.env.COOLIFY_CONTAINER_NAME || Date.now()).slice(0, 64);
+
 /** Gövde sınırı yola göre: plan.md yüklemesi büyük olabilir, gerisi küçük. */
 export function planGovdeSiniri(yol) {
   if (yol === '/api/plan/yukle') return YUKLEME_SINIRI;
@@ -768,7 +771,7 @@ export async function planIstegi(ctx) {
         await zincir;                                   // okuma, kendinden önce gelen her yazmayı görür
         const b = yukle();
         return cevap(200, {
-          kalici: b.kalici, uyari: b.uyari, guncellendi: b.durum.guncellendi,
+          kalici: b.kalici, uyari: b.uyari, guncellendi: b.durum.guncellendi, surum: SURUM,
           haftalar: b.durum.haftalar, gorevler: b.durum.gorevler,
           seanslar: b.durum.seanslar.slice(-1500),
           kapanislar: b.durum.kapanislar, ayarlar: b.durum.ayarlar,

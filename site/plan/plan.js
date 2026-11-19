@@ -1019,6 +1019,7 @@
 
   let odakEkrani = null, odakZamanlayici = null, ekranKilidi = null;
 
+  const ODAK_TUR_DK = 90;
   function odakBaslat(g) {
     sayfaKapat();
     const an = suAnDk();
@@ -1026,7 +1027,13 @@
     if (g.bas && dkSaat(g.bas) <= an && an < dkSaat(g.bit)) hedef = dkSaat(g.bit) - an;   // bloğun sonuna kadar
     else if (g.bas) hedef = dkSaat(g.bit) - dkSaat(g.bas);
     else hedef = g.dk || 50;
-    const o = { baslangic: Date.now(), hedefDk: Math.max(5, Math.min(240, hedef)), baslik: g.baslik, gorevId: g.id, gun: bugun() };
+    // Tek tur en çok 90 dk: "4 saat 12 dk" gibi dev bir sayaç odağı bozar. Uzun iş = art arda turlar.
+    hedef = Math.min(ODAK_TUR_DK, hedef);
+    // Toplantıyla çakışmasın: sıradaki görüşmeden 5 dk önce biter.
+    const toplanti = gunToplantilari(bugun()).filter((x) => x.b > an).sort((x, y) => x.b - y.b)[0];
+    if (toplanti && toplanti.b - an - 5 < hedef) hedef = toplanti.b - an - 5;
+    const o = { baslangic: Date.now(), hedefDk: Math.max(5, hedef), baslik: g.baslik, gorevId: g.id, gun: bugun(),
+      toplanti: toplanti && toplanti.b - an - 5 <= hedef ? saatDk(toplanti.b) : null };
     depoYaz('dc_odak', JSON.stringify(o));
     odakGoster(o);
     odakBildir(o);
@@ -1053,7 +1060,7 @@
         el('p', { class: 'goz', text: 'Derin odak' }),
         el('h2', { class: 'odak-baslik', text: o.baslik }),
         kalan, el('span', { class: 'odak-cubuk' }, halka), alt,
-        el('p', { class: 'odak-kural', text: 'Telefonu bırak. Tek iş. Bitince bas.' }),
+        el('p', { class: 'odak-kural', text: o.toplanti ? `Telefonu bırak. ${o.toplanti} toplantısından 5 dk önce biter.` : 'Telefonu bırak. Tek iş. Bitince bas.' }),
         el('div', { class: 'odak-dugmeler' },
           kilitliDugme('birincil', 'Bitir', 20, () => odakBitir(false)),
           dagildimDugmesi())));
@@ -1115,12 +1122,14 @@
     ciz();
     if (!r.ok) return hataBildir(r);
     const g = o.gorevId && bul(o.gorevId);
-    if (g && !g.bitti && !dagildi) {
+    if (!dagildi) {
+      const bugunDerin = derinDk([bugun()]);
       sayfaAc(
         el('p', { class: 'sayfa-baslik', text: `${sureYaz(dk)} derin iş kaydedildi.` }),
-        el('p', { class: 'sayfa-soru', text: g.baslik }),
-        secenek('Bitti, işaretle', () => { sayfaKapat(); isaretle(g); }),
-        secenek('Devam edecek', sayfaKapat, null, 'sade'));
+        el('p', { class: 'sayfa-soru', text: `${g ? g.baslik + ' · ' : ''}bugün toplam ${sureYaz(bugunDerin)}` }),
+        g && !g.bitti ? secenek('Bitti, işaretle', () => { sayfaKapat(); isaretle(g); }) : null,
+        secenek('Bir tur daha', () => odakBaslat(g && !g.bitti ? g : { id: null, baslik: o.baslik, dk: ODAK_TUR_DK }), `${ODAK_TUR_DK} dk`),
+        secenek('Mola ver', sayfaKapat, null, 'sade'));
     } else {
       bildir(`${sureYaz(dk)} derin iş kaydedildi`);
     }
@@ -1630,12 +1639,26 @@
 
   /* ======================= eşitleme ======================= */
 
+  // Yeni sürüm yayına çıkınca telefonda eski ekran kalmasın: açık sayfa/odak yokken kendini yeniler.
+  let yuklenenSurum = null;
+  function yeniSurumMu(v) {
+    if (!v.surum || D.cevrimdisi) return false;
+    if (!yuklenenSurum) { yuklenenSurum = v.surum; return false; }
+    if (v.surum === yuklenenSurum || acikSayfa || odakEkrani || bekleyenIslem || D.bekleyenSil) return false;
+    if (ekleGirdi && ekleGirdi.value) return false;            // yazarken bölme
+    if (Date.now() - Number(depoOku('dc_yenilendi') || 0) < 5 * 60e3) return false;   // yayın sırasında gidip gelmesin
+    depoYaz('dc_yenilendi', String(Date.now()));
+    location.reload();
+    return true;
+  }
+
   async function senkron(zorla) {
     if (!zorla && (bekleyenIslem || D.bekleyenSil || document.hidden || acikSayfa || odakEkrani)) return;
     if (!zorla && Date.now() - disZamani > 5 * 60e3) disYukle();
     const r = await istek('');
     if (!r.ok) return;
     if (D.cevrimdisi !== r.cevrimdisi) { D.cevrimdisi = r.cevrimdisi; zorla = true; }
+    if (yeniSurumMu(r.v)) return;
     if (!zorla && r.v.guncellendi && r.v.guncellendi === D.guncellendi) {
       if (D.secili === bugun()) ciz();                 // "Şimdi" kartı ve şimdi çizgisi saatle değişir
       return;
@@ -1697,6 +1720,7 @@
     const r = await istek('');
     if (r.ok) {
       D.cevrimdisi = r.cevrimdisi;
+      if (!r.cevrimdisi && r.v.surum) yuklenenSurum = r.v.surum;
       veriAl(r.v);
       ciz();
       senkronBaslat();
