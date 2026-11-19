@@ -1042,7 +1042,7 @@
         kalan, el('span', { class: 'odak-cubuk' }, halka), alt,
         el('p', { class: 'odak-kural', text: 'Telefonu bırak. Tek iş. Bitince bas.' }),
         el('div', { class: 'odak-dugmeler' },
-          el('button', { class: 'birincil', type: 'button', onclick: () => odakBitir(false) }, 'Bitir'),
+          kilitliDugme('birincil', 'Bitir', 20, () => odakBitir(false)),
           dagildimDugmesi())));
     document.body.append(odakEkrani);
     if (ekleCubugu) ekleCubugu.hidden = true;
@@ -1065,23 +1065,23 @@
     ekranAcikKalsin();
   }
 
-  /** "Dağıldım, bırak" odak ekranı açıldıktan 30 sn sonra etkinleşir (kurucunun isteği):
-      ilk dürtüyle hemen bırakılamaz; 30 sn sonra tek dokunuş yeter. */
-  const BIRAK_BEKLE_SN = 30;
-  function dagildimDugmesi() {
-    const d = el('button', { class: 'sade-beyaz', type: 'button', disabled: true, onclick: () => odakBitir(true) });
-    let kalan = BIRAK_BEKLE_SN;
-    d.textContent = `Dağıldım, bırak · ${kalan} sn`;
+  /** Odak ekranının düğmeleri hemen basılamaz (kurucunun isteği): "Bitir" 20 sn, "Dağıldım, bırak"
+      30 sn sonra etkinleşir; ilk dürtüyle çıkılmaz. Süre dolunca tek dokunuş yeter. */
+  function kilitliDugme(sinif, metin, sn, is) {
+    const d = el('button', { class: sinif, type: 'button', disabled: true, onclick: is });
+    let kalan = sn;
+    d.textContent = `${metin} · ${kalan} sn`;
     const sayac = setInterval(() => {
       if (!d.isConnected) return clearInterval(sayac);
       kalan--;
-      if (kalan > 0) { d.textContent = `Dağıldım, bırak · ${kalan} sn`; return; }
+      if (kalan > 0) { d.textContent = `${metin} · ${kalan} sn`; return; }
       clearInterval(sayac);
       d.disabled = false;
-      d.textContent = 'Dağıldım, bırak';
+      d.textContent = metin;
     }, 1000);
     return d;
   }
+  function dagildimDugmesi() { return kilitliDugme('sade-beyaz', 'Dağıldım, bırak', 30, () => odakBitir(true)); }
 
   async function odakBitir(dagildi) {
     const o = acikOdak();
