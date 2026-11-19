@@ -601,15 +601,19 @@
     return ad ? `Toplantı · ${ad}` : (t.baslik || 'Toplantı');
   }
 
+  /** Kurucunun sırası: Bugünün 3'ü → acil+önemli → acil önemsiz → önemli → önemsiz → sınıflanmamış.
+      Aynı kutuda: sesle/yazıyla döktüklerim önce, sonra plan.md'den gelenler, en son CRM'den alınanlar. */
+  const KUTU_SIRA = { 1: 0, 3: 1, 2: 2, 4: 3 };
+  function oncelikSirala(liste) {
+    const kaynakSira = (g) => (crmIsareti(g) ? 2 : g.kaynak === 'plan' ? 1 : 0);
+    const sira = (g) => (g.ust ? -100 : 0) + (KUTU_SIRA[g.kadran || g.oneri] ?? 4) * 6 + (g.kadran ? 0 : 3) + kaynakSira(g);
+    return liste.slice().sort((a, b) => sira(a) - sira(b));
+  }
+
   /* --- Yapılacaklar: saatsiz işler; CRM tek satırda katlı --- */
   function kafamBolumu(gun, liste) {
     const saatsiz = liste.filter((g) => !g.bas && !g.ust);
-    // Kurucunun sırası: acil+önemli → acil önemsiz → önemli → önemsiz → sınıflanmamış.
-    // Aynı kutuda: sesle/yazıyla döktüklerim önce, sonra planla gelenler, en son CRM'den alınanlar.
-    const KUTU_SIRA = { 1: 0, 3: 1, 2: 2, 4: 3 };
-    const kaynakSira = (g) => (crmIsareti(g) ? 2 : g.kaynak === 'plan' ? 1 : 0);
-    const sira = (g) => (KUTU_SIRA[g.kadran || g.oneri] ?? 4) * 6 + (g.kadran ? 0 : 3) + kaynakSira(g);
-    const acik = saatsiz.filter((g) => !g.bitti).sort((a, b) => sira(a) - sira(b));
+    const acik = oncelikSirala(saatsiz.filter((g) => !g.bitti));
     const siniflanmamis = acik.filter((g) => !g.kadran && !g.gecici);
     const onerili = siniflanmamis.filter((g) => g.oneri);
     const bitmis = saatsiz.filter((g) => g.bitti);
@@ -941,11 +945,17 @@
       secenek(sonra ? 'Şimdilik saatsiz bırak' : 'Vazgeç', () => { sayfaKapat(); if (sonra) sonra(); }, null, 'sade'));
   }
 
-  /** Boş saate dokununca: bu saate ne koyalım? Kafamdakiler + CRM + yeni yaz. */
+  /** Boş saate dokununca: bu saate ne koyalım? Önce yapılacaklarım (öncelik sırasıyla, tek dokunuş),
+      sonra geçmişten kalanlar, en altta yeni yaz ve CRM. Her seferinde yeniden yazmak gerekmesin. */
   function saateKoySayfasi(gun, dk) {
     const bas = saatDk(dk);
-    const adaylar = gunGorevleri(gun).filter((g) => !g.bas && !g.bitti && !g.gecici);
+    const adaylar = oncelikSirala(gunGorevleri(gun).filter((g) => !g.bas && !g.bitti && !g.gecici));
+    const eskiler = gun === bugun() ? oncelikSirala(kalanlar().filter((g) => !g.bas)) : [];
     const crm = gun === bugun() ? crmBekleyen().slice(0, 6) : [];
+    const isSecenegi = (g) => secenek(g.baslik, () => koy(varsayilanSure(g.dk), async (b, e2) => {
+      if (g.gun !== gun) await tasi(g, gun);
+      if (await duzenle(g, { bas: b, bit: e2 })) bildir(`${b}–${e2} saatine kondu`);
+    }), [g.ust ? 'Bugünün 3’ü' : g.kadran ? KADRAN[g.kadran].kisa : null, g.dk ? `${g.dk} dk` : null].filter(Boolean).join(' · ') || null);
     const yaz = el('input', { type: 'text', maxlength: '300', placeholder: 'Yeni iş yaz…', enterkeyhint: 'done', 'aria-label': 'Yeni iş' });
     const form = el('form', { class: 'duzen' }, yaz);
     const koy = async (sure, fn) => {
@@ -962,14 +972,17 @@
     });
     sayfaAc(
       el('p', { class: 'sayfa-baslik', text: `${bas}’a ne koyalım?` }),
-      el('p', { class: 'sayfa-soru', text: 'Bir iş seç ya da yenisini yaz. Süreyi sonra değiştirebilirsin.' }),
-      form,
+      el('p', { class: 'sayfa-soru', text: adaylar.length || eskiler.length ? 'Listenden birine dokun. Süreyi sonra değiştirebilirsin.' : 'Yeni bir iş yaz.' }),
       adaylar.length ? el('p', { class: 'ara-baslik', text: 'Yapılacaklar' }) : null,
-      adaylar.map((g) => secenek(g.baslik, () => koy(varsayilanSure(g.dk), async (b, e2) => { if (await duzenle(g, { bas: b, bit: e2 })) bildir(`${b}–${e2} saatine kondu`); }), g.dk ? `${g.dk} dk` : null)),
+      adaylar.map(isSecenegi),
+      eskiler.length ? el('p', { class: 'ara-baslik', text: 'Geçmişten kalan' }) : null,
+      eskiler.map(isSecenegi),
+      el('p', { class: 'ara-baslik', text: 'Ya da yeni yaz' }),
+      form,
       crm.length ? el('p', { class: 'ara-baslik', text: 'CRM’den' }) : null,
       crm.map((i) => secenek(i.baslik, () => koy(varsayilanSure(i.dk), (b, e2) => crmAl(i, { bas: b, bit: e2 })), i.dk ? `${i.dk} dk` : null)),
       secenek('Vazgeç', sayfaKapat, null, 'sade'));
-    setTimeout(() => { if (!adaylar.length && !crm.length) yaz.focus(); }, 50);
+    setTimeout(() => { if (!adaylar.length && !eskiler.length && !crm.length) yaz.focus(); }, 50);
   }
 
   /** Bugünün 3'üne aday seç: günün açık işleri + CRM. */
